@@ -53,6 +53,20 @@ sign to get a fully operational system.
  -DDIGSIG_LOG: This activates the logging. Be careful about the amount
  of log to be generated at run time. 
 
+MODULE PARAMETERS
+===================
+
+Digsig currently accepts a single optional parameter.  If it is
+loaded with dsi_max_cached_sigs=<int>, then it will cache up to
+<int> signature validations.  The default value is 512.
+
+To enable this parameter using digsig.init, you would change the
+module insertion line from
+
+  /sbin/insmod -f ./digsig_verif.ko || exit 1
+to
+  /sbin/insmod -f ./digsig_verif.ko dsi_max_cached_sigs=1024 || exit 1
+
 Requirements:
 ==============
 
@@ -119,6 +133,32 @@ subsequent calls to this binary.
 When a binary file is modified, the corresponding cache entry in the memory 
 is invalidated.   
 
+Revocation support 
+====================
+
+As of release 1.3, revocation of signatures is supported.  If a library
+or binary is found to have a vulnerability, you no longer want digsig to
+allow that file to be loaded.  By revoking the signature, you tell
+digsig that although the file's signature was in fact calculated with
+the valid private key, it should nevertheless refuse to load this
+binary.
+
+You can revoke a signature as follows.  Assume we want to revoke the
+signatures for sshd and ftpd.  Use tools/extract_sig (use a patched
+version of bsign for now) to extract the signature of each file into
+separate files under /etc/digsig_revoked_keys/.  For instance:
+
+$ ./tools/extract_sig /usr/sbin/sshd /etc/digsig_revoked_keys/sshd_v3.5p1
+$ ./tools/extract_sig /usr/sbin/in.ftpd /etc/digsig_revoked_keys/ftpd
+
+Now the startup script ./digsig.init will automatically copy these files
+into /sys/digsig/digsig_revoke after module insertion and before the
+public key is committed.  Once digsig starts enforcing, no more
+signature revocations are accepted.  Any attempts to execute the revoked
+versions of /usr/sbin/sshd or /usr/sbin/in.ftpd be refused.
+
+To DISABLE revocation, remove the "-DREVOCATION" flag from EXTRA_CFLAGS
+in ./Makefile.
 
 A Very simple scenario to show how to use it  
 =======================================
@@ -140,6 +180,9 @@ example.
 $cp `which ps` ps-test
 $bsign -s ps-test // sign the binary 
 $bsign -V ps-test // be sure that the signature is valid  
+
+Provided that works, sign all your binaries and libraries using bsign.
+Consult section 2 ("Usage") of the bsign README for helpful hints.
 
 3) Make the digsig module 
 

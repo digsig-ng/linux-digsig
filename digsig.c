@@ -40,6 +40,8 @@
 #include "dsi_debug.h"
 #include "dsi.h"
 #include "dsi_sysfs.h"
+#include "digsig_cache.h"
+#include "digsig_revocation.h"
 
 #include "gnupg/mpi/mpi.h"
 #include "gnupg/cipher/rsa-verify.h"
@@ -74,16 +76,13 @@ int DSIDebugLevel = DEBUG_INIT | DEBUG_SIGN  ;
 int DSIDebugLevel = DEBUG_INIT;
 #endif
 
-int dsi_max_hashed_sigs = 512, dsi_num_hashed_sigs = 0;
-module_param(dsi_max_hashed_sigs, int, 0);
-MODULE_PARM_DESC(dsi_max_hashed_sigs, "Number of signatures to keep hashed\n");
+/* Maximum number of signature validations which will be cached */
+int dsi_max_cached_sigs = 512;
+module_param(dsi_max_cached_sigs, int, 0);
+MODULE_PARM_DESC(dsi_max_cached_sigs, "Number of signatures to keep cached\n");
 
-/* from dsi_cache.c */
-int is_hashed_signature(struct inode *inode);
-void remove_signature(struct inode *inode);
-int del_hashes(int num);
-void add_signature_hash(struct inode *inode);
-int dsi_init_caching(void);
+/* Number of signature validations cached so far */
+int dsi_num_cached_sigs = 0;
 
 /******************************************************************************
 Description : 
@@ -105,7 +104,7 @@ dsi_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
 		return 0;
 
 	if (inode && mask & MAY_WRITE) {
-		if (is_hashed_signature(inode))
+		if (is_cached_signature(inode))
 			remove_signature(inode);
 	}
 
@@ -122,7 +121,7 @@ Return value:
 static int
 dsi_inode_unlink(struct inode *dir, struct dentry *dentry)
 {
-	if (!is_hashed_signature(dentry->d_inode))
+	if (!is_cached_signature(dentry->d_inode))
 		return 0;
 
 	remove_signature(dentry->d_inode);
@@ -135,10 +134,6 @@ struct security_operations dsi_security_ops;
 		if (!ops->function) {				\
 			ops->function = dsi_##function;		\
                 }
-
-static char *dsi_find_signature(struct elfhdr *elf_ex,
-				Elf32_Shdr * elf_shdata,
-				struct file *file, int *sh_offset);
 
 static int
 dsi_verify_signature(Elf32_Shdr * elf_shdata,
@@ -228,6 +223,13 @@ dsi_verify_signature(Elf32_Shdr * elf_shdata,
 	unsigned int size;
 	unsigned int lower, upper;
 	SIGCTX *ctx;
+
+	if (dsi_is_revoked_sig(sig_orig)) {
+		DSM_ERROR("dsi_find_signature: Refusing attempt to load an ELF"
+			"file with a revoked signature.\n");
+		up (&dsi_digsig_sem);
+		return -EPERM;
+	}
 
 	down (&dsi_digsig_sem);
 	if ((ctx = dsi_sign_verify_init(HASH_SHA1, SIGN_RSA)) == NULL) {
@@ -347,8 +349,8 @@ int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 
 	DSM_PRINT(DEBUG_SIGN, "binary is %s\n", file->f_dentry->d_name.name);
 
-	if (is_hashed_signature(file->f_dentry->d_inode)) {
-		DSM_PRINT(DEBUG_SIGN, "Binary %s had a hashed signature validation.\n", file->f_dentry->d_name.name);
+	if (is_cached_signature(file->f_dentry->d_inode)) {
+		DSM_PRINT(DEBUG_SIGN, "Binary %s had a cached signature validation.\n", file->f_dentry->d_name.name);
 		retval = 0;
 		goto out_file;
 	}
@@ -427,7 +429,7 @@ int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 	if (!retval) {
 		DSM_PRINT(DEBUG_SIGN,
 			  "dsi_file_mmap: Signature verification successful\n");
-		add_signature_hash(file->f_dentry->d_inode);
+		dsi_cache_signature(file->f_dentry->d_inode);
 	} else if (retval > 0) {
 		DSM_ERROR("dsi_file_mmap: Signature do not match for %s\n", file->f_dentry->d_name.name);
 		retval = -EPERM;
@@ -499,8 +501,8 @@ int dsi_bprm_check_security(struct linux_binprm *bprm)
 		goto out_file;
 	}
 
-	if (is_hashed_signature(file->f_dentry->d_inode)) {
-		DSM_PRINT(DEBUG_SIGN, "Binary %s had a hashed signature validation.\n", bprm->filename);
+	if (is_cached_signature(file->f_dentry->d_inode)) {
+		DSM_PRINT(DEBUG_SIGN, "Binary %s had a cached signature validation.\n", bprm->filename);
 		retval = 0;
 		goto out_file;
 	}
@@ -583,7 +585,7 @@ int dsi_bprm_check_security(struct linux_binprm *bprm)
 	if (!retval) {
 		DSM_PRINT(DEBUG_SIGN,
 			  "dsi_bprm_compute_creds: Signature verification successful for %s\n", bprm->filename);
-		add_signature_hash(file->f_dentry->d_inode);
+		dsi_cache_signature(file->f_dentry->d_inode);
 	} else if (retval > 0) {
 		DSM_ERROR("dsi_bprm_compute_creds: Signature do not match for %s\n", bprm->filename);
 		retval = -EPERM;
@@ -620,28 +622,9 @@ void security_set_operations(struct security_operations *ops)
 
 }
 
-char digsig_file_name[] = "digsig_interface";
-static struct attribute digsig_attribute = {
-	.name = digsig_file_name,
-	.mode = S_IRUSR | S_IWUSR
-};
-static struct sysfs_ops digsig_sysfs_ops = {
-	.show = digsig_show,
-	.store = digsig_store
-};
-static struct kobj_type digsig_kobj_type = {
-	.sysfs_ops = &digsig_sysfs_ops,
-};
-static struct kobject digsig_kobject = {
-	.name = "digsig",
-	.ktype = &digsig_kobj_type
-};
-
-
 static int __init digsig_init_module(void)
 {
 	int err = 0;
-	int tmp; 
 
 	DSM_PRINT(DEBUG_INIT, "Initializing module\n");
 
@@ -650,6 +633,7 @@ static int __init digsig_init_module(void)
 	if (dsi_init_caching()){
 	  return -ENOMEM;
 	}
+	dsi_init_revocation();
 
 	/* initialize DSI's hooks */
 	security_set_operations(&dsi_security_ops);
@@ -662,14 +646,11 @@ static int __init digsig_init_module(void)
 
 	init_MUTEX (&dsi_digsig_sem);
 
-	if (kobject_register (&digsig_kobject) != 0) {
-		DSM_ERROR ("Digsig key failed to register properly\n");
-		return -1;
+	if ((err = dsi_init_sysfs()) != 0) {
+		DSM_ERROR("Error setting up sysfs for dsi\n");
+		return err;
 	}
-	if ((tmp = sysfs_create_file (&digsig_kobject, &digsig_attribute)) != 0) {
-		DSM_ERROR ("Create file failed\n");
-		return -1;
-	}
+
 	return 0;
 }
 
@@ -678,8 +659,9 @@ static void __exit digsig_exit_module(void)
 	DSM_PRINT(DEBUG_INIT, "Deinitializing module\n");
 	dsi_sign_verify_free();
 	unregister_security(&dsi_security_ops);
-	sysfs_remove_file (&digsig_kobject, &digsig_attribute);
-	kobject_unregister (&digsig_kobject);
+	dsi_cleanup_sysfs();
+	dsi_cleanup_revocation();
+	dsi_cache_cleanup();
 }
 
 module_init(digsig_init_module);
