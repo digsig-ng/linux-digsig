@@ -12,7 +12,7 @@
  *      (at your option) any later version.
  *
  * Author: David Gordon Aug 2003 
- * modifs: Makan Pourzandi Nov 2003 - Sept 2004: fixes 
+ * modifs: Makan Pourzandi Nov 2003 - Sept 2004: fixes - Feb 2005: bug fix 
  *         Vincent Roy  Nov 2003: add functionality for mmap  
  *         Serge Hallyn Jan 2004: add caching of signature validation
  *         Chris Wright Sept 2004: many fixes 
