@@ -1,0 +1,130 @@
+Release of digsig.0.1
+
+We implemented a kernel module for 2.5.66 which checks signatures
+before running a binary.  The main goal is to insert digital
+signatures inside the ELF binary and verify this signature before
+loading the binary. It is based on the LSM hooks. 
+
+It has been added to DSI's CVS. In order to simplify its use, we
+extracted the digital signature code from the DSI module, therefore
+some dsi-based source code files are still in the package. However,
+the module is independent from DSI and you don't need to download the
+whole dsi tar ball to play with the digsig module (even if we'll be
+more than happy to have your feedback about dsi project :-)).
+
+Our approach has been to use the existing solutions like gpg and bsign
+rather than reinventing the whole thing from scratch.
+
+However, in order to reduce the blot in the kernel, we took only the
+minimum code necessary from GPG. We took only the MPI (Multi Precision
+Integer) source code and the RSA crypto source code. This helped much
+to reduce the amount of code imported to the kernel in sourc code of
+the original (only 1/10 of the original gnupg 1.2.2 sourc code has
+been imported to the kernel module). On the other hand, we avoided
+OpenSSL source code for the fact that the licensing was not clear to
+us. We did some tests at user level and found out that OpenSSL is 2
+times faster than GPG regarding RSA verification. As a future
+direction, we plan to clarify this licensing issue and use OpenSSL
+instead of GPG.
+
+Requirements:
+==============
+
+Linux OS kernel 2.5.66 or  higher. 
+
+Bsign version
+0.4.5. (http://packages.debian.org/unstable/admin/bsign.html)
+
+GPG 1.2.2 or higher. 
+
+Performances
+=============== 
+
+This is release 0.1. We haven't done much on benchmarking. 
+
+We ran lmbench on a Pentium IV, 2.4 GHz, 500 mega bytes of memory,
+running Linux 2.5.66. Our benchmarks show that the execution time
+(exec function call) multiplies by a factor of 4 when the module is
+loaded (no changes for fork call, as the binary is not loaded into
+memory).
+
+A Very simple scenraio to show how to use it  
+=======================================
+
+1) Generate gpg key and export your public key in order to use it for
+ signature verification.
+ 
+$gpg --gen-key 
+
+=> careful generate RSA key 
+
+$gpg --export >> my_public_key.pub 
+
+2) Sign your binaries using Bsign 
+
+Before using bsign to sign all your binaries, try out with a simple
+example.
+
+$cp `which ps` ps-test
+$bsign -s ps-test // sign the binary 
+$bsign -v ps-test // be sure that the signature is valid  
+
+3) Make the digsig module 
+
+From ./digsig, do make -C /usr/src/linux-2.5.66 SUBDIRS=$PWD modules. You need rw acess to /usr/src/linux-2.5.66. 
+
+CAREFULL: we advice you to compile the module in debug mode at your
+first tries (see -DDSI_DEBUG -DDSI_DIGSIG_DEBUG in the Makefile). In
+this mode, the module verifies the signatures but does not enforce the
+security (if not any signature present in your binary, you'll have a
+message in /var/log/messages but the execution is not
+aborted.). However, the execution of the bianries with invalid
+signatures is aborted. Once, you're sure of your binary signature
+procedure you can recompile the whole on non-debug mode.
+
+4) load digsig, use the public key exported in step 1 as argument 
+
+insmod digsig_verif.ko pkey_file=/usr/src/digsig/my_public_key.pub
+
+5) In debug mode: 
+
+$ps 
+$./ps-test 
+
+$tail -f /var/log/messages 
+Sep 16 15:49:13 colby kernel: DSI-LSM MODULE - binary is /bin/ps
+Sep 16 15:49:16 colby kernel: DSI-LSM MODULE - binary is ./ps-makan
+Sep 16 15:49:16 colby kernel: DSI-LSM MODULE - dsi_bprm_compute_creds: Found signature section
+Sep 16 15:49:16 colby kernel: DSI-LSM MODULE - dsi_bprm_compute_creds: Signature verification successful
+
+6) In restrictive mode, normal mode 
+
+You need to use bsign to sign all binaries that you want to run in
+normal mode. 
+
+// signed binary 
+[lmcmpou@reblochon lmcmpou]$ ps
+  PID TTY          TIME CMD
+ 6897 pts/2    00:00:00 bash
+ 6941 pts/2    00:00:00 ps
+
+// not signed binary 
+[lmcmpou@reblochon lmcmpou]$ ./ps-makan-1
+bash: ./ps-makan: cannot execute binary file
+
+// binary with wrong signature 
+[lmcmpou@reblochon lmcmpou]$ ./ps-makan-2 
+bash: ./ps-makan-colby: Operation not permitted
+
+
+This work has been done by (alphabetical order) 
+
+A Apvrille (axelle.apvrille@ericsson.ca),
+D Gordon (davidgordonca@yahoo.ca),  
+M Pourzandi (makan.pourzandi@ericsson.ca),
+V Roy (vincent.roy@ericsson.ca).
+
+Special merits go to David who wrote big chunks of the source code.
+
+Thanks to Marc Springer who helped us with the use of Bsign. 
+
