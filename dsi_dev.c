@@ -39,17 +39,17 @@
    For use with GnuPG, we should copy everything except the first byte
 */
 #ifdef DIGSIG_LTM
-#define KEY_OFFSET 3
+#define DSI_KEY_OFFSET 3
 #else
-#define KEY_OFFSET 1
+#define DSI_KEY_OFFSET 1
 #endif
 
-extern int g_init;
-extern unsigned char *raw_public_key_n;
-extern unsigned char *raw_public_key_e;
-extern int dsi_mpi_size_n;
-extern int dsi_mpi_size_e;
-int device_file_major = 0;
+extern int g_init; /* digsig.c */
+extern unsigned char *raw_public_key_n; /* dsi_sig_verify */
+extern unsigned char *raw_public_key_e; /* dsi_sig_verify */
+extern int dsi_mpi_size_n; /* dsi_sig_verify */
+extern int dsi_mpi_size_e; /* dsi_sig_verify */
+int device_file_major = 0; /* digsig.c */
 
 /********************************************************************************
 Description : This function reads the public key parts
@@ -67,7 +67,7 @@ ssize_t dsi_write(struct file *filp, const char *buff, size_t count,
 
 	/* do not accept to re-initialize the module with
 	   new public key. This avoids many coherency
-	   problem when updating jeys while checking the
+	   problem when updating keys while checking the
 	   signatures.*/
 	if (g_init)
 		return -1;
@@ -76,27 +76,27 @@ ssize_t dsi_write(struct file *filp, const char *buff, size_t count,
 
 	case 'n':
 		raw_public_key_n =
-			(unsigned char *) kmalloc(count - KEY_OFFSET, DSI_SAFE_ALLOC);
+			(unsigned char *) kmalloc(count - DSI_KEY_OFFSET, DSI_SAFE_ALLOC);
 		if (!raw_public_key_n) {
 			DSM_ERROR("kmalloc fail for n in dsi_write\n");
 			return -ENOMEM;
 		}
-		if (copy_from_user(raw_public_key_n, &buff[KEY_OFFSET], count - KEY_OFFSET))
+		if (copy_from_user(raw_public_key_n, &buff[DSI_KEY_OFFSET], count - DSI_KEY_OFFSET))
 			return -EFAULT;
-		dsi_mpi_size_n = count - KEY_OFFSET;
+		dsi_mpi_size_n = count -DSI_ KEY_OFFSET;
 		DSM_PRINT(DEBUG_DEV, "pkey->n size is %i\n",
 			  dsi_mpi_size_n);
 		break;
 	case 'e':
 		raw_public_key_e =
-			(unsigned char *) kmalloc(count - KEY_OFFSET, DSI_SAFE_ALLOC);
+			(unsigned char *) kmalloc(count - DSI_KEY_OFFSET, DSI_SAFE_ALLOC);
 		if (!raw_public_key_e) {
 			DSM_ERROR("kmalloc fail for e in dsi_write\n");
 			return -ENOMEM;
 		}
-		if (copy_from_user(raw_public_key_e, &buff[KEY_OFFSET], count - KEY_OFFSET))
+		if (copy_from_user(raw_public_key_e, &buff[DSI_KEY_OFFSET], count - DSI_KEY_OFFSET))
 			return -EFAULT;
-		dsi_mpi_size_e = count - KEY_OFFSET;
+		dsi_mpi_size_e = count - DSI_KEY_OFFSET;
 		DSM_PRINT(DEBUG_DEV, "pkey->e size is %i\n",
 			  dsi_mpi_size_e);
 		break;

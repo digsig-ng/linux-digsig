@@ -169,7 +169,6 @@ int
 dsi_sign_verify_final(SIGCTX * ctx, char *sig, int siglen /* PublicKey */ ,
 		      unsigned char *signed_hash)
 {
-/*	char digest[gDigestLength[ctx->digestAlgo]];*/
 	char *digest;
 	int rc = -1;
 

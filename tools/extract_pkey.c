@@ -51,7 +51,7 @@ int main(int argc, char **argv)
 		printf ("Unable to open pkey_file %s %s\n", argv[1], strerror(errno));
 		return -1;
 	}
-	module_file = open ("/sys/Digsig_key/digsig_key_file", O_WRONLY);
+	module_file = open ("/sys/digsig/digsig_interface", O_WRONLY);
 	if (!module_file) {
 		printf ("Unable to open module char device %s\n", strerror(errno));
 		return -1;

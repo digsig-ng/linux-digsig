@@ -49,8 +49,10 @@
 
 #ifdef DSI_DIGSIG_DEBUG
 #define DIGSIG_MODE 0		/*permissive  mode */
+#define DIGSIG_BENCH 1
 #else
 #define DIGSIG_MODE -EPERM	/*restrictive mode */
+#define DIGSIG_BENCH 0
 #endif
 
 #ifdef MP_LOW_MEM
@@ -295,7 +297,7 @@ int dsi_bprm_check_security(struct linux_binprm *bprm)
 	if (!g_init)
 		return 0;
 
-	if (DSIDebugLevel & DEBUG_TIME)	/* measure exec time only on DEBUG mode. */
+	if (DIGSIG_BENCH)	/* measure exec time only on DEBUG mode. */
 		exec_time = jiffies;
 
 	DSM_PRINT(DEBUG_SIGN, "binary is %s\n", bprm->filename);
@@ -401,7 +403,7 @@ int dsi_bprm_check_security(struct linux_binprm *bprm)
  out_file:
 	filp_close(file, 0);
 
-	if (DSIDebugLevel & DEBUG_TIME) {	/* measure exec time only on DEBUG mode. */
+	if (DIGSIG_BENCH) {	/* measure exec time only on DEBUG mode. */
 		exec_time = jiffies - exec_time;
 		total_jiffies += exec_time;
 		DSM_PRINT(DEBUG_TIME, "Time to execute dsi_bprm_check_security on %s is %li\n", bprm->filename, exec_time);
@@ -416,7 +418,7 @@ void security_set_operations(struct security_operations *ops)
 
 }
 
-char digsig_file_name[] = "digsig_key_file";
+char digsig_file_name[] = "digsig_interface";
 static struct attribute digsig_attribute = {
 	.name = digsig_file_name,
 	.mode = S_IRUSR | S_IWUSR
@@ -428,8 +430,8 @@ static struct sysfs_ops digsig_sysfs_ops = {
 static struct kobj_type digsig_kobj_type = {
 	.sysfs_ops = &digsig_sysfs_ops,
 };
-static struct kobject digsig_key = {
-	.name = "Digsig_key",
+static struct kobject digsig_kobject = {
+	.name = "digsig",
 	.ktype = &digsig_kobj_type
 };
 
@@ -451,11 +453,11 @@ static int __init digsig_init_module(void)
 
 	init_MUTEX (&dsi_digsig_sem);
 
-	if (kobject_register (&digsig_key) != 0) {
+	if (kobject_register (&digsig_kobject) != 0) {
 		DSM_ERROR ("Digsig key failed to register properly\n");
 		return -1;
 	}
-	if ((tmp = sysfs_create_file (&digsig_key, &digsig_attribute)) != 0) {
+	if ((tmp = sysfs_create_file (&digsig_kobject, &digsig_attribute)) != 0) {
 		DSM_ERROR ("Create file failed\n");
 		return -1;
 	}
@@ -494,8 +496,8 @@ static void __exit digsig_exit_module(void)
 	DSM_PRINT(DEBUG_INIT, "Deinitializing module\n");
 	dsi_sign_verify_free();
 	unregister_security(&dsi_security_ops);
-	sysfs_remove_file (&digsig_key, &digsig_attribute);
-	kobject_unregister (&digsig_key);
+	sysfs_remove_file (&digsig_kobject, &digsig_attribute);
+	kobject_unregister (&digsig_kobject);
 
 #ifdef DIGSIG_LTM
 	DSM_PRINT(DEBUG_SIGN, "Deinitializing public key holder\n");

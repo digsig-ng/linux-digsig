@@ -8,10 +8,25 @@ root_or_die()
 	    exit 1
     fi
 }
+sysfs_test()
+{
+    echo "Testing if sysfs is mounted in /sys."
+    sysfsmounted=`grep sysfs /proc/mounts`
+    if [ -n "$sysfsmounted" ]
+    then
+	echo "sysfs found"
+    else
+	echo "sysfs not mounted"
+	echo "please mount sysfs with a command like :"
+	echo "mount -t sysfs sysfs /sys"
+	exit 1
+    fi
+}
 
 case "$1" in
     start)
 	root_or_die
+	sysfs_test
 	echo "Loading Digsig module."
 	/sbin/insmod -f ./digsig_verif.ko || exit 1
 	echo "Loading public key."	

@@ -156,7 +156,6 @@ int
 dsi_sign_verify_final(SIGCTX * ctx, char *sig, int siglen /* PublicKey */ ,
 		      unsigned char *signed_hash)
 {
-/*	char digest[gDigestLength[ctx->digestAlgo]];*/
 	char *digest;
 	int rc = -1;
 
@@ -269,7 +268,6 @@ int dsi_rsa_bsign_verify(unsigned char *hash_format, int length,
 	int i;
 	SIGCTX *ctx = NULL;
 	unsigned char *new_sig;
-/*	unsigned char new_sig[gDigestLength[HASH_SHA1]];*/
 
 	new_sig = kmalloc (gDigestLength[HASH_SHA1], DSI_SAFE_ALLOC);
 	if (!new_sig) {
