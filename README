@@ -52,7 +52,8 @@ sign to get a fully operational system.
 
  -DDSI_EXEC_ONLY: DigSig normally checks the signatures for shared
 binaries. If you wish for performance reason or whatever other reason
-to only verify the signatures executable binaries set this variable. 
+to only verify the signatures for executable binaries set this
+variable.
 
 Requirements:
 ==============
