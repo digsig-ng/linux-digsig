@@ -1,5 +1,5 @@
 /*
- * Distributed Security Module (DSM)
+ * Digital Signature (DigSig)
  *
  * This file contains the digsig hook to the kernel.
  * The set of function was defined by the LSM interface.

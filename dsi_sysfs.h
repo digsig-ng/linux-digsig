@@ -1,5 +1,5 @@
 /*
- * Distributed Security Module (DSM)
+ *  Digital Signature (DigSig)
  *
  * dsi_dev.h
  *

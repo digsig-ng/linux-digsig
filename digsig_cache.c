@@ -1,5 +1,5 @@
 /*
- * Distributed Security Module (DSM)
+ * Digital Signature (DigSig)
  *
  * This file contains the signature caching code.
  *
@@ -11,9 +11,9 @@
  *      the Free Software Foundation; either version 2 of the License, or
  *      (at your option) any later version.
  *
- * Author: David Gordon Aug 2003 
- * modifs: Makan Pourzandi Sep 2003 - Nov 2003
- *         Serge Hallyn Nov 2003, Jan 2004: add caching of signature validation
+ * Author: Serge Hallyn Nov 2003, Jan 2004: add caching of signature validation
+ * modifs: Makan Pourzandi Mar 2004 
+ *         
  */
 
 #include <linux/moduleparam.h>

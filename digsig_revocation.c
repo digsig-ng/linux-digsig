@@ -1,5 +1,5 @@
 /*
- * Distributed Security Module (DSM)
+ *  Digital Signature (DigSig)
  *
  * This file implements a list of revoked signatures, and checks each loaded
  * library or binary against the list.  If its signature has been revoked,

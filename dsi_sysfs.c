@@ -1,11 +1,12 @@
 /*
- * Distributed Security Module (DSM)
+ * Digital Signature (DigSig)
  *
  * dsi_sysfs.c
  *
  * This file contains the sysfs interface to userspace.
  *
  * Copyright (C) 2002-2003 Ericsson, Inc
+ * Copyright (c) 2003-2004 International Business Machines <serue@us.ibm.com> 
  *
  *      This program is free software; you can redistribute it and/or modify
  *      it under the terms of the GNU General Public License as published by

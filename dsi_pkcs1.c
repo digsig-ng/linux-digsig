@@ -1,5 +1,5 @@
 /*
- * Distributed Security Module (DSM)
+ * Digital Signature (DigSig)
  *
  * pkcs1.c
  *
