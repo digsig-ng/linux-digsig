@@ -39,13 +39,8 @@
 #include "dsi.h"
 #include "dsi_sysfs.h"
 
-#ifdef DIGSIG_LTM
-#include "ltm/tommath.h"
-#else
 #include "gnupg/mpi/mpi.h"
 #include "gnupg/cipher/rsa-verify.h"
-#endif
-
 
 #ifdef DSI_DIGSIG_DEBUG
 #define DIGSIG_MODE 0		/*permissive  mode */
@@ -61,13 +56,7 @@
 #define TAB_SIZE 256
 #endif
 
-#ifdef DIGSIG_LTM
-extern mp_int dsi_public_key[2]; /* dsi_sig_verify.c */
-unsigned char *packed;
-mp_int *M, *W, *W2;
-#else
 extern MPI *dsi_public_key[2]; /* dsi_sig_verify.c */
-#endif
 
 unsigned long int total_jiffies = 0;
 
@@ -77,7 +66,13 @@ static struct semaphore dsi_digsig_sem;
 /* Indicate if module as key or not */
 int g_init = 0;
 
-int DSIDebugLevel = DEBUG_INIT | DEBUG_DEV | DEBUG_SIGN | DEBUG_TIME;
+#ifdef DIGSIG_LOG
+int DSIDebugLevel = DEBUG_INIT | DEBUG_SIGN  ;
+#else
+int DSIDebugLevel = DEBUG_INIT;
+#endif
+
+
 
 struct security_operations dsi_security_ops;
 
@@ -262,8 +257,7 @@ dsi_verify_signature(Elf32_Shdr * elf_shdata,
 	up (&dsi_digsig_sem);
 	return retval;
 }
-
-#ifdef DSI_MMAP
+#ifndef DSI_EXEC_ONLY
 int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 {
 	struct elfhdr elf_ex;
@@ -393,7 +387,7 @@ int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 	return retval;
 
 }
-#else /* DSI_MMAP */
+#endif /* DSI_EXEC_ONLY for dsi_file_mmap */
 /******************************************************************************
 Description :
 We don't have to check if file is regular, exists, or is zero
@@ -416,6 +410,7 @@ Careful!!! endian type is platform dependent, big endian is assumed for i386
 Parameters  : 
 Return value: 
 ******************************************************************************/
+#ifdef DSI_EXEC_ONLY
 int dsi_bprm_check_security(struct linux_binprm *bprm)
 {
 	struct elfhdr elf_ex;
@@ -541,11 +536,11 @@ int dsi_bprm_check_security(struct linux_binprm *bprm)
 	}
 	return retval;
 }
-#endif /* DSI_MMAP */
+#endif /* DSI_EXEC_ONLY for dsi_bprm_check_security */
 
 void security_set_operations(struct security_operations *ops)
 {
-#ifdef DSI_MMAP
+#ifndef DSI_EXEC_ONLY
 	set_dsi_ops (ops, file_mmap);
 #else
 	set_dsi_ops(ops, bprm_check_security);
@@ -596,33 +591,6 @@ static int __init digsig_init_module(void)
 		DSM_ERROR ("Create file failed\n");
 		return -1;
 	}
-
-#ifdef DIGSIG_LTM
-	DSM_PRINT(DEBUG_SIGN, "Initializing public key holder\n");
-	mp_init(&dsi_public_key[0]);
-	mp_init(&dsi_public_key[1]);
-	packed = kmalloc (2048 * sizeof(unsigned char), DSI_SAFE_ALLOC);
-	if (!packed) {
-		DSM_ERROR ("kmalloc failed in digsig_init_module for packed\n");
-		return -ENOMEM;
-	}
-	M = kmalloc (TAB_SIZE * sizeof (mp_int), DSI_SAFE_ALLOC);
-	if (!M) {
-		DSM_ERROR ("kmalloc failed in digsig_init_module for M\n");
-		return -ENOMEM;
-	}
-	W = kmalloc (MP_WARRAY * sizeof (mp_word), DSI_SAFE_ALLOC);
-	if (!W) {
-		DSM_ERROR ("kmalloc failed in digsig_init_module for W\n");
-		return -ENOMEM;
-	}
-	W2 = kmalloc (MP_WARRAY * sizeof(mp_word), DSI_SAFE_ALLOC);
-	if (!W2) {
-		DSM_ERROR ("kmalloc failed in digsig_init_module for W2\n");
-		return -ENOMEM;
-	}
-#endif
-
 	return 0;
 }
 
@@ -633,16 +601,6 @@ static void __exit digsig_exit_module(void)
 	unregister_security(&dsi_security_ops);
 	sysfs_remove_file (&digsig_kobject, &digsig_attribute);
 	kobject_unregister (&digsig_kobject);
-
-#ifdef DIGSIG_LTM
-	DSM_PRINT(DEBUG_SIGN, "Deinitializing public key holder\n");
-	mp_clear(&dsi_public_key[0]);
-	mp_clear(&dsi_public_key[1]);
-	kfree (packed);
-	kfree (M);
-	kfree (W);
-	kfree (W2);
-#endif
 }
 
 module_init(digsig_init_module);

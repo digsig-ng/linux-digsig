@@ -29,31 +29,30 @@ OpenSSL is 4 times faster than GPG regarding RSA verification. As a
 future direction, we plan to clarify this licensing issue and use (if
 possible) OpenSSL instead of GPG.
 
-We integrated the the Tom St-denis's crypto library at
-http://math.libtomcrypt.org/ to digsig.  It's now possible to use it if
-you define digsig-ltm in the Makefile.
-
 INSTALL
 =========== 
 
 To compile Digsig from the directory you installed Digsig do: 
 [root@digsig]# ./digsig.init compile
 
-
 You can set different compilation arguments in Makefile: 
 
- -DDSI_DEBUG: This allows to print the debug messages to
+-DDSI_DEBUG: This allows to print the debug messages to
 /var/log/messages.
 
- -DDSI_DIGSIG_DEBUG: When this variable is set Digsig will run in
+-DDSI_DIGSIG_DEBUG: When this variable is set Digsig will run in
 debug mode.  In debug mode, DigSig lets unsigned binaries run. This
 state is ideal to test DigSig, and also list the binaries you need to
 sign to get a fully operational system.
 
- -DDSI_EXEC_ONLY: DigSig normally checks the signatures for shared
+-DDSI_EXEC_ONLY: DigSig normally checks the signatures for shared
 binaries. If you wish for performance reason or whatever other reason
 to only verify the signatures for executable binaries set this
 variable.
+
+-DDIGSIG_LOG: This allows to generate logs at verfication time. Be
+careful about the amount of log to be generated at run
+time. Definitely, useful for debugging purposes.
 
 Requirements:
 ==============
@@ -108,33 +107,6 @@ Time is in jiffies -> 1 jiffies = 1ms
 
 Linear regression
 time = 1.393899E-5 * size + 0.815081 
-
-Micro tests with libtommath: 
-
-We present below the overhead at kernel-level for checking the
-signature.
-
-Always on a Pentium IV, 2.2 GHz, 512 mega bytes of memory, running
-Linux 2.6.0-test6:
-
-+-----------+---------+----------+
-| Binairies |   Size  |   Time   |
-+-----------+---------+----------+
-|        ls |   68230 |  2.58537 |
-|        ps |   70337 |  2.40000 |
-|   busybox |  248801 |  5.48485 |
-|       cvs |  672532 | 12.33898 |
-|       vim | 1894305 | 32.52632 |
-|     emacs | 4093614 | 68.26087 |
-+-----------+---------+----------+
-Each binairy has been executed 30 time
-Time is in jiffies -> 1 jiffies = 1ms
-
-linear regression
-ltm   -> time = 1.635071E-5 * size + 1.393258
-
-It is somewaht slower then gnupg but we think it is possible to
-optimize it to be faster.
 
 A Very simple scenario to show how to use it  
 =======================================
