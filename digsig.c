@@ -78,10 +78,10 @@ int DigsigDebugLevel = DEBUG_INIT | DEBUG_SIGN;
 int DigsigDebugLevel = DEBUG_INIT;
 #endif
 
-/* Maximum number of signature validations which will be cached */
-int digsig_max_cached_sigs = 512;
-module_param(digsig_max_cached_sigs, int, 0);
-MODULE_PARM_DESC(digsig_max_cached_sigs, "Number of signatures to keep cached\n");
+int dsi_cache_buckets = 128;
+module_param(dsi_cache_buckets, int, 0);
+MODULE_PARM_DESC(dsi_cache_buckets, "Number of cache buckets for signatures validations.\n");
+
 
 /******************************************************************************
 Description : 
@@ -537,7 +537,8 @@ static int digsig_file_mmap(struct file * file, unsigned long prot, unsigned lon
 	/* Find signature section */
 	sig_orig = digsig_find_signature(elf_ex, elf_shdata, file, &sh_offset);
 	if (sig_orig == NULL) {
-		DSM_ERROR("%s: Signature not found for the binary: %s !\n", 
+		DSM_PRINT(DEBUG_SIGN,
+		"%s: Signature not found for the binary: %s !\n", 
 			  __FUNCTION__, file->f_dentry->d_name.name);
 		goto out_free_shdata;
 	}
@@ -621,12 +622,6 @@ static void __exit digsig_exit_module(void)
 {
 	DSM_PRINT (DEBUG_INIT, "Deinitializing module\n");
 	g_init = 0;
-	digsig_sign_verify_free();
-	digsig_cleanup_sysfs();
-	digsig_cleanup_revocation();
-	digsig_cache_cleanup();
-	mpi_free(digsig_public_key[0]);
-	mpi_free(digsig_public_key[1]);
 	if (secondary) {
 		DSM_PRINT (DEBUG_INIT, "Attempting to unregister from primary module\n");
 		if (mod_unreg_security ("digsig_verif", &digsig_security_ops)) {
@@ -637,6 +632,13 @@ static void __exit digsig_exit_module(void)
 		DSM_ERROR (KERN_INFO "Failure unregistering DigSig with the kernel\n");
 		}
 	}
+
+	digsig_sign_verify_free();
+	digsig_cleanup_sysfs();
+	digsig_cleanup_revocation();
+	digsig_cache_cleanup();
+	mpi_free(digsig_public_key[0]);
+	mpi_free(digsig_public_key[1]);
 }
 
 security_initcall(digsig_init_module);

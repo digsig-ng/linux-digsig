@@ -257,9 +257,6 @@ digsig_key_show (struct kobject *obj, struct attribute *attr, char *buff)
 static ssize_t
 digsig_revoked_store (struct kobject *obj, struct attribute *attr, const char *buff, size_t count)
 {
-        struct revoked_sig *sig;
-        int rcount = DIGSIG_ELF_SIG_SIZE - DIGSIG_BSIGN_INFOS - DIGSIG_RSA_DATA_OFFSET;
-
         if (g_init)
                 return -EPERM;
 
@@ -269,15 +266,7 @@ digsig_revoked_store (struct kobject *obj, struct attribute *attr, const char *b
                 return -EINVAL;
         }
 
-        sig = kmalloc(sizeof(struct revoked_sig), GFP_KERNEL);
-        if (!sig)
-                return -ENOMEM;
-        memset(sig, 0, sizeof(struct revoked_sig));
-        sig->sig = mpi_read_from_buffer(
-		buff + DIGSIG_BSIGN_INFOS + DIGSIG_RSA_DATA_OFFSET,
-		&rcount, 0);
-
-	digsig_add_revoked_sig(sig);
+	digsig_add_revoked_sig(buff);
 
         DSM_PRINT(DEBUG_SIGN, "Added a revoked sig.\n");
         return count;

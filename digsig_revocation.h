@@ -28,13 +28,13 @@
  * table.
  */
 struct revoked_sig {
-	struct list_head next;
+	struct hlist_node next;
 	MPI sig;
 };
 
 void digsig_init_revocation(void);
 void digsig_cleanup_revocation(void);
-void digsig_add_revoked_sig(struct revoked_sig *sig);
+int digsig_add_revoked_sig(const char *buffer);
 #ifdef DIGSIG_REVOCATION
 int digsig_is_revoked_sig(char *buffer);
 #else
@@ -42,4 +42,3 @@ int digsig_is_revoked_sig(char *buffer);
 #endif
 
 #endif /* _DSI_REVOKE_H */
-

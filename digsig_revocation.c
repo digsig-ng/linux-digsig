@@ -15,6 +15,8 @@
  *
  * Author: Serge Hallyn Mar 2004
  * modifs: Chris Wright Sept 2004 
+ *         Serge Hallyn Sep 2004: added a hash table (keyed on the first 4
+ +                        bytes of the hash) for quicker revocation lookup.
  */
 
 #include <linux/moduleparam.h>
@@ -26,6 +28,7 @@
 #include "digsig_cache.h"
 #include "digsig_revocation.h"
 #include "dsi_sig_verify.h"
+#include <linux/hash.h>
 
 #ifdef DIGSIG_DEBUG
 #define DIGSIG_MODE 0		/*permissive  mode */
@@ -35,33 +38,12 @@
 #define DIGSIG_BENCH 0
 #endif
 
-static LIST_HEAD(digsig_revoked_sigs);
-static spinlock_t revoked_list_lock = SPIN_LOCK_UNLOCKED;
+static spinlock_t revoked_list_wlock = SPIN_LOCK_UNLOCKED;
 
-/*
- * Description: Called at module unload to free the list of revoked
- * signatures
- */
-void digsig_free_revoked_sigs(void)
-{
-	struct list_head *tmp;
-	struct revoked_sig *rsig;
+#define REVOKE_BITS 6
+#define REVOKE_BUCKETS 64
 
-	spin_lock(&revoked_list_lock);
-	while (!list_empty(&digsig_revoked_sigs)) {
-		tmp = digsig_revoked_sigs.next;
-		if (tmp != &digsig_revoked_sigs) {
-			list_del(tmp);
-			rsig = list_entry(tmp, struct revoked_sig, next);
-			mpi_free(rsig->sig);
-			kfree(rsig);
-		} else {
-			DSM_ERROR("major list screwyness\n");
-			break;
-		}
-	}
-	spin_unlock(&revoked_list_lock);
-}
+static struct hlist_head dsi_revoked_sigs[REVOKE_BUCKETS];
 
 /*
  * Description: Called at exec (digsig_verify_signature) to check whether the
@@ -71,34 +53,71 @@ void digsig_free_revoked_sigs(void)
 #ifdef DIGSIG_REVOCATION
 int digsig_is_revoked_sig(char *buffer)
 {
-	struct revoked_sig *rsig;
+	struct hlist_node *tmp;
 	char *tmp1 = buffer + DIGSIG_BSIGN_INFOS + DIGSIG_RSA_DATA_OFFSET;
 	int count = DIGSIG_ELF_SIG_SIZE - DIGSIG_BSIGN_INFOS - DIGSIG_RSA_DATA_OFFSET;
-	int ret = 0;
+	int h, ret = 0;
 	MPI file_sig = mpi_read_from_buffer(tmp1, &count, 0);
 
-	spin_lock(&revoked_list_lock);
-	list_for_each_entry(rsig, &digsig_revoked_sigs, next) {
-		if (mpi_cmp(file_sig, rsig->sig) == 0) {
+	h = hash_long(*(unsigned long *)tmp1, REVOKE_BITS);
+
+	hlist_for_each(tmp, &dsi_revoked_sigs[h]) {
+		struct revoked_sig *e = hlist_entry(tmp, struct revoked_sig, next);
+		if (mpi_cmp(file_sig, e->sig) == 0) {
 			ret = 1;
 			goto out;
 		}
 	}
+
 out:
-	spin_unlock(&revoked_list_lock);
 	mpi_free(file_sig);
 	return ret;
 }
 #endif
 
-void digsig_add_revoked_sig(struct revoked_sig *sig)
+int digsig_add_revoked_sig(const char *buffer) {
+	int rcount = DIGSIG_ELF_SIG_SIZE - DIGSIG_BSIGN_INFOS - DIGSIG_RSA_DATA_OFFSET;
+	const char *tmp1 = buffer + DIGSIG_BSIGN_INFOS + DIGSIG_RSA_DATA_OFFSET;
+	struct revoked_sig *s;
+	int h;
+
+	s = kmalloc(sizeof(struct revoked_sig), GFP_ATOMIC);
+
+	if (!s)
+		return -ENOMEM;
+
+	INIT_HLIST_NODE(&s->next);
+
+	h = hash_long(*(unsigned long*)tmp1, REVOKE_BITS);
+	s->sig = mpi_read_from_buffer(tmp1, &rcount, 0);
+	spin_lock(&revoked_list_wlock);
+	hlist_add_head(&s->next, &dsi_revoked_sigs[h]);
+	spin_unlock(&revoked_list_wlock);
+
+	return 0;
+}
+
+inline void digsig_init_revocation(void)
 {
-	spin_lock(&revoked_list_lock);
-        list_add_tail(&sig->next, &digsig_revoked_sigs);
-	spin_unlock(&revoked_list_lock);
+	int i;
+
+	for (i=0; i<REVOKE_BUCKETS; i++)
+		INIT_HLIST_HEAD(&dsi_revoked_sigs[i]);
 }
 
 void digsig_cleanup_revocation(void)
 {
-	digsig_free_revoked_sigs();
+	int i;
+	struct hlist_node *tmp;
+	struct revoked_sig *e;
+
+	for (i=0; i<REVOKE_BUCKETS; i++) {
+		while (!hlist_empty(&dsi_revoked_sigs[i])) {
+			tmp = dsi_revoked_sigs[i].first;
+			hlist_del(tmp);
+			e = hlist_entry(tmp, struct revoked_sig, next);
+			mpi_free(e->sig);
+			kfree(e);
+		}
+	}
 }

@@ -14,6 +14,7 @@
  * Author: Serge Hallyn Nov 2003, Jan 2004: add caching of signature validation
  * modifs: Makan Pourzandi Mar 2004 
  *         Chris Wright    Sep 2004 
+ *         Serge Hallyn Sep 2004: moved to smp-scalable seqlock-based design.
  *         
  */
 
@@ -25,6 +26,8 @@
 #include "dsi.h"
 #include "digsig_cache.h"
 #include "dsi_sig_verify.h"
+#include <linux/hash.h>
+#include <linux/seqlock.h>
 
 #ifdef DIGSIG_DEBUG
 #define DIGSIG_MODE 0		/*permissive  mode */
@@ -34,73 +37,73 @@
 #define DIGSIG_BENCH 0
 #endif
 
-extern int digsig_max_cached_sigs;
-/* Number of signature validations cached so far */
-static int digsig_num_cached_sigs;
+extern int dsi_cache_buckets;
 
 /*
- * digsig_hash_table:
- * A hash table to implement caching of validated signatures.  When the
- * signature on an ELF file has been validated, the inode and superblock
- * are added to this cache.  Future loads of the file will not need to be
- * revalidated unless the file has been written to.
+ * digsig_hash_line: seqlock_t = 28 bytes; next_evicted=2;
+ * Assuming 128 byte cache line, this leaves 98 bytes for
+ * the entry structs.  Each of those is 12 bytes, so we'll
+ * use 8 entries per bucket (96 bytes)
  *
- * We create an array of digsig_max_cached_sigs such structs.  On
- * collisions, we simply allocate a new struct, and point existing
- * entry's ->next to the newly allocated struct.  This means we may
- * end up with more than digsig_max_cached_sigs structs allocated.  (But
- * we will only use digsig_max_cached_sigs of them).
+ * We will default to 128 buckets, taking 16384 bytes, and
+ * giving between 128 and 1024 (depending on # collisions)
+ * entries.
  */
-struct digsig_hash_table {
-	short orig;  /* did this come from the original array, or malloc'ed? */
-	short initialized;  /* in use? */
-	struct list_head lru;  /* least recently used list of all actives */
+#define ENTRIES_PER_BUCKET 8
 
-	/* If the inode address, inode number, and superblock address
-	 * are all the same, we assume it's the same inode.  Using i_ino
-	 * as well just in case the inode struct was quickly re-used. */
+/*
+ * digsig_hash_entry: a single inode signature validation cache
+ * entry.  Since we don't clear these on file unload, we check the
+ * inode number and i_sb to ensure the inode was not cleared since
+ * we cached the validation.
+ *
+ * 12 bytes
+ */
+struct digsig_hash_entry {
 	struct inode *inode;
 	unsigned long i_ino;
 	struct super_block *i_sb;
-
-	/*
-	 * link collisions in doubly linked list headed at the static
-	 * array
-	 */
-	struct digsig_hash_table *next;
-	struct digsig_hash_table *prev;  /* only set if dynamically alloced */
 };
 
-static struct digsig_hash_table *sig_cache;
-static LIST_HEAD(sig_cache_lru);
-static spinlock_t sig_cache_spinlock = SPIN_LOCK_UNLOCKED;
+/*
+ * digsig_hash_line: this is a cache entry bucket.  hash(inode)
+ * will index to a hash bucket, which contains ENTRIES_PER_BUCKET
+ * entries for collisions.  In this way a lookup should be write-less,
+ * and entirely contained within one cache line.
+ *
+ * When a bucket is full, we evict in a round-robin fashion (unless
+ * the next_evicted happened to be the last allocated)
+ */
+struct digsig_hash_line {
+	seqlock_t sequence;
+	struct digsig_hash_entry entry[ENTRIES_PER_BUCKET];
+	short next_evicted;
+};
+
+static struct digsig_hash_line *sig_cache;
+static int digsig_hash_bits;
+
+#define hash(inode) hash_long((unsigned long)inode, digsig_hash_bits)
 
 /******************************************************************************
-Description : 
-haha...  Well, it actually works pretty well.
-Parameters  :  @inode to hash
-Return value: Return the hash value. 
-******************************************************************************/
-static inline int
-hash(struct inode *inode)
-{
-	return ((unsigned long)inode) % digsig_max_cached_sigs;
-}
-
-/******************************************************************************
-Description : is_same_inode?
+Description : does the cache validation entry describe this inode?
+	If the inode * is the same value, but i_ino or i_sb has changed, then
+	the inode has been unloaded since we saved the validation, so we must
+	clear the entry.
 Parameters  : 
 	@p: a cached signature validation entry
 	@inode: an inode
 Return value: 1 if the sig entry is for the given inode, 0 otherwise 
 ******************************************************************************/
 static inline int
-is_same_inode(struct digsig_hash_table *p, struct inode *inode)
+is_same_inode(struct digsig_hash_entry *e, struct inode *inode)
 {
-	if (p->inode != inode)
+	if (e->inode != inode)
 		return 0;
-	if (p->i_ino != inode->i_ino || p->i_sb != inode->i_sb)
+	if (e->i_ino != inode->i_ino || e->i_sb != inode->i_sb) {
+		e->inode = NULL;
 		return 0;
+	}
 
 	return 1;
 }
@@ -112,24 +115,21 @@ Return value: 1 if found, 0 otherwise
 ******************************************************************************/
 int is_cached_signature(struct inode *inode)
 {
-	struct digsig_hash_table *p;
+	struct digsig_hash_line *l;
+	unsigned seq;
+	int i, h, found;
 
-	if (!digsig_num_cached_sigs)
-		return 0;
+	h = hash(inode);
+	l = &sig_cache[h];
+	do {
+		found = 0;
+		seq = read_seqbegin(&l->sequence);
+		for (i=0; i<ENTRIES_PER_BUCKET && !found; i++)
+			if (is_same_inode(&l->entry[i], inode))
+				found = 1;
+	} while (read_seqretry(&l->sequence, seq));
 
-	p = &sig_cache[hash(inode)];
-	while (p && p->initialized && !is_same_inode(p, inode))
-		p = p->next;
-
-	if (p && p->initialized && is_same_inode(p, inode)) {
-		/* renew sig validation in lru list */
-		spin_lock(&sig_cache_spinlock);
-		list_move_tail(&p->lru, &sig_cache_lru);
-		spin_unlock(&sig_cache_spinlock);
-		return 1;
-	}
-
-	return 0;
+	return found;
 }
 
 /******************************************************************************
@@ -139,173 +139,66 @@ Return value: none
 ******************************************************************************/
 void remove_signature(struct inode *inode)
 {
-	struct digsig_hash_table *p;
+	struct digsig_hash_line *l;
+	int i, h;
 
-	if (!digsig_num_cached_sigs)
-		return;
-
-	spin_lock(&sig_cache_spinlock);
-	p = &sig_cache[hash(inode)];
-	while (p && p->initialized && !is_same_inode(p, inode))
-		p = p->next;
-	if (p && p->initialized && is_same_inode(p, inode)) {
-		if (!p->orig) {
-			p->prev->next = p->next;
-			if (p->next)
-				p->next->prev = p->prev;
-			list_del(&p->lru);
-			kfree(p);
-			digsig_num_cached_sigs--;
-			goto out_unlock;
-		}
-		p->initialized = 0;
-		p->next = 0;
-		p->inode = NULL;
-		list_del_init(&p->lru);
-		digsig_num_cached_sigs--;
-	}
-out_unlock:
-	spin_unlock(&sig_cache_spinlock);
+	h = hash(inode);
+	l = &sig_cache[h];
+	write_seqlock(&l->sequence);
+	for (i=0; i<ENTRIES_PER_BUCKET; i++)
+		if (is_same_inode(&l->entry[i], inode))
+			l->entry[i].inode = 0;
+	write_sequnlock(&l->sequence);
 }
 
-
-/******************************************************************************
-Description : 
- * digsig_purge_cache(num): clear out num sig validations from the end of the
- * lru list.  Must be called with sig_cache_spinlock held.  Returns the
- * number actually deleted.
-Parameters  : @num: number of cached sig validation entries to clear.
-Return value: number of entries actually deleted.
-******************************************************************************/
-static int digsig_purge_cache(int num)
-{			
-	int i=0;
-	struct digsig_hash_table *tmph, *del;
-
-	while (i < digsig_max_cached_sigs && i<num) {
-		i++;
-		tmph = list_entry(sig_cache_lru.next,
-				struct digsig_hash_table, lru);
-
-		if (!tmph->orig) {
-			tmph->prev->next = tmph->next;
-			if (tmph->next)
-				tmph->next->prev = tmph->prev;
-			list_del(&tmph->lru);
-
-			kfree(tmph);
-			continue;
-		}
-
-		/* this came off the original array */
-		if (tmph->next) {
-			/* It has a next->, so we delete that one */
-			del = tmph->next;
-			tmph->inode = del->inode;
-
-			tmph->next = del->next; 
-
-			if (del->next)
-				del->next->prev = tmph; 
-
-			list_del(&del->lru);
-
-			kfree(del);
-			continue;
-		}
-		tmph->initialized = 0;
-		tmph->next = 0;
-		tmph->inode = NULL;
-		list_del_init(&tmph->lru);
-	}
-	digsig_num_cached_sigs -= i;
-
-	return i;
-}
-
-/******************************************************************************
-Description : 
- * Allocate a new digsig_hash_table.  (We had a hash collision)
- * Called with sig_cache_spinlock held.
-Parameters  : 
-	@inode whose sig validation should be cached
-	@next: entry in front of which we're entering the new one.
-Return value: the newly allocated entry.
-******************************************************************************/
-static struct digsig_hash_table *
-alloc_digsig_hash(struct inode *inode, struct digsig_hash_table *next)
+static inline short inc_evicted(struct digsig_hash_line *l)
 {
-	struct digsig_hash_table *new;
-
-	new = kmalloc(sizeof(struct digsig_hash_table), GFP_ATOMIC);
-	if (!new)
-		return ERR_PTR(-ENOMEM);
-
-	memset(new, 0, sizeof(struct digsig_hash_table));
-	new->inode = inode;
-	new->i_ino = inode->i_ino;
-	new->i_sb = inode->i_sb;
-	new->initialized = 1;
-	
-	if (next) {
-		new->next = next;
-		next->prev = new;
-	}
-	
-	return new;
+	short ret = l->next_evicted++;
+	if (l->next_evicted == ENTRIES_PER_BUCKET)
+		l->next_evicted = 0;
+	return ret;
 }
 
 /******************************************************************************
 Description : 
  * We've validated the signature on inode.  Cache that decision.
- * We only store digsig_max_cached_sigs decision.  If we're breaking that
- * number, then delete one third of the cached decisions at random.
+ * If the hash bucket is full, we pick the next evicted entry in a round-robin
+ * fashion.  Otherwise, we make sure that the next evicted entry will not be
+ * the one we just inserted.
 Parameters  : 
 	@inode: inode whose signature validation to cache
 Return value: none
 ******************************************************************************/
 void digsig_cache_signature(struct inode *inode)
 {
-	int h;
-	struct digsig_hash_table *new;
-	
-	if (!inode)
-		return;
+	struct digsig_hash_line *l;
+	int i, h;
 
-	spin_lock(&sig_cache_spinlock);
-	if (digsig_num_cached_sigs >= digsig_max_cached_sigs) {
-	        if (!digsig_purge_cache(4)) {
-			DSM_PRINT(DEBUG_SIGN,
-				"%s: unable to clear cache entries\n",
-				__FUNCTION__);
-			goto out_unlock;
-		}
-	}
+	if (!inode)
+		panic("digsig:%s:asked to cache null inode\n", __FUNCTION__);
 
 	h = hash(inode);
-	if (!sig_cache[h].initialized) {
-		/* hash(inode) was an empty slot */
-		sig_cache[h].inode = inode;
-		sig_cache[h].i_ino = inode->i_ino;
-		sig_cache[h].i_sb = inode->i_sb;
-		sig_cache[h].initialized = 1;
-		sig_cache[h].next = NULL;
-		digsig_num_cached_sigs++;
-		list_add_tail(&sig_cache[h].lru, &sig_cache_lru);
-		goto out_unlock;
-	}
 
-	/* allocate new structure */
-	new = alloc_digsig_hash(inode, sig_cache[h].next);
-	if (IS_ERR(new))
-		goto out_unlock;
-	sig_cache[h].next = new;
-	new->prev = &sig_cache[h];
-	list_add_tail(&new->lru, &sig_cache_lru);
-	digsig_num_cached_sigs++;
+	l = &sig_cache[h];
 
-out_unlock:
-	spin_unlock(&sig_cache_spinlock);
+	DSM_PRINT(DEBUG_SIGN,
+		"%s: adding cache entry at %d\n", __FUNCTION__, h);
+
+	if (!write_tryseqlock(&l->sequence))
+		return;
+
+	for (i=0; i<ENTRIES_PER_BUCKET && l->entry[i].inode; i++);
+
+
+	if (i == ENTRIES_PER_BUCKET)
+		i = inc_evicted(l);
+	else if (i == l->next_evicted)
+		inc_evicted(l);
+
+	l->entry[i].inode = inode;
+	l->entry[i].i_ino = inode->i_ino;
+	l->entry[i].i_sb = inode->i_sb;
+	write_sequnlock(&l->sequence);
 }
 
 /******************************************************************************
@@ -315,22 +208,32 @@ Return value: 0 on success, 1 on failure.
 ******************************************************************************/
 int __init digsig_init_caching(void)
 {
-        int tmp;
-        
-	sig_cache = kmalloc(digsig_max_cached_sigs * 
-				sizeof(struct digsig_hash_table), GFP_ATOMIC); 
-				/* GFP_KERNEL); */ 
-	
+	int i, j;
+
+	/* dsi_cache_buckets must be a power of two */
+	digsig_hash_bits = long_log2(dsi_cache_buckets);
+	if (dsi_cache_buckets != (1 << digsig_hash_bits)) {
+		digsig_hash_bits++;
+		dsi_cache_buckets = 1 << digsig_hash_bits;
+		DSM_PRINT (DEBUG_INIT,
+				"%s: dsi_cache_buckets set to %d (bits %d)\n",
+				__FUNCTION__, dsi_cache_buckets, digsig_hash_bits);
+	}
+
+	sig_cache = kmalloc(dsi_cache_buckets * 
+			sizeof(struct digsig_hash_line), GFP_KERNEL);
+
+
 	if (!sig_cache) {
-	  DSM_PRINT(DEBUG_ERROR, "No memory to initialize digsig cache.\n");
+		DSM_PRINT(DEBUG_ERROR, "No memory to initialize digsig cache.\n");
 		return 1;
 	}
 
-	memset(sig_cache, 0,
-		digsig_max_cached_sigs * sizeof(struct digsig_hash_table));
-
-	for (tmp=0; tmp<digsig_max_cached_sigs; tmp++) {
-		sig_cache[tmp].orig = 1;
+	for (i=0; i<dsi_cache_buckets; i++) {
+		seqlock_init(&sig_cache[i].sequence);
+		sig_cache[i].next_evicted = 0;
+		for (j=0; j<ENTRIES_PER_BUCKET; j++)
+			sig_cache[i].entry[j].inode = NULL;
 	}
 
 	return 0; 
@@ -341,6 +244,6 @@ int __init digsig_init_caching(void)
  */
 void digsig_cache_cleanup(void)
 {
-	digsig_purge_cache(digsig_num_cached_sigs);
 	kfree(sig_cache);
+	sig_cache = NULL;
 }
