@@ -22,8 +22,8 @@
 #include "dsi_debug.h"
 #include "dsi_extract_mpi.h"
 
-#define DSI_ELF_SIG_SIZE 512               /* this is a redefinition */
-#define DSI_PKEY_N_OFFSET        8         /* offset for pkey->n */
+#define DSI_ELF_SIG_SIZE 512	/* this is a redefinition */
+#define DSI_PKEY_N_OFFSET        8	/* offset for pkey->n */
 
 /******************************************************************************
                              Internal functions 
@@ -34,7 +34,8 @@ Description :
 Parameters  : 
 Return value: 
 ******************************************************************************/
-int dsi_get_pkey(unsigned char* raw_public_key_n, unsigned char* raw_public_key_e, char* pkey_file)
+int dsi_get_pkey(unsigned char *raw_public_key_n,
+		 unsigned char *raw_public_key_e, char *pkey_file)
 {
 
 /*
@@ -50,18 +51,18 @@ int dsi_get_pkey(unsigned char* raw_public_key_n, unsigned char* raw_public_key_
 
 	DSM_PRINT(DEBUG_SIGN, "Call filp_open\n");
 
-	fd = filp_open (pkey_file, O_RDONLY, 0400); 
-	if (IS_ERR(fd) || (fd==NULL)){
-	  DSM_ERROR ("digsig: Unable to open file %s !\n", pkey_file);
-	  return -1;
-	}
-	
-	if (!fd->f_op || !fd->f_op->mmap || !fd->f_op->read) {
-	  DSM_ERROR ("No file_operations struct\n");
-	  return -1;
+	fd = filp_open(pkey_file, O_RDONLY, 0400);
+	if (IS_ERR(fd) || (fd == NULL)) {
+		DSM_ERROR("digsig: Unable to open file %s !\n", pkey_file);
+		return -1;
 	}
 
-	DSM_PRINT(DEBUG_SIGN,"pkey->n MPI:\n{ ");
+	if (!fd->f_op || !fd->f_op->mmap || !fd->f_op->read) {
+		DSM_ERROR("No file_operations struct\n");
+		return -1;
+	}
+
+	DSM_PRINT(DEBUG_SIGN, "pkey->n MPI:\n{ ");
 
 	kernel_read(fd, offset++, &c, 1);
 	raw_public_key_n[0] = c;
@@ -75,19 +76,20 @@ int dsi_get_pkey(unsigned char* raw_public_key_n, unsigned char* raw_public_key_
 	len = (len + 7) / 8;
 
 	if (len > DSI_ELF_SIG_SIZE) {
-	  DSM_PRINT(DEBUG_SIGN, "\nLength of 'n' MPI is too large %#x\n", len);
-	  return -1;
+		DSM_PRINT(DEBUG_SIGN,
+			  "\nLength of 'n' MPI is too large %#x\n", len);
+		return -1;
 	}
 
 	for (i = 0; i < len; i++) {
 		kernel_read(fd, offset++, &c, 1);
-		raw_public_key_n[i+2] = c;
+		raw_public_key_n[i + 2] = c;
 		printk("%#x, ", c & 0xff);
 	}
 
 	printk("}\n");
 
-	DSM_PRINT(DEBUG_SIGN,"pkey->e MPI:\n{ ");
+	DSM_PRINT(DEBUG_SIGN, "pkey->e MPI:\n{ ");
 	kernel_read(fd, offset++, &c, 1);
 	raw_public_key_e[0] = c;
 	printk("%#x, ", c & 0xff);
@@ -100,19 +102,19 @@ int dsi_get_pkey(unsigned char* raw_public_key_n, unsigned char* raw_public_key_
 	len = (len + 7) / 8;
 
 	if (len > DSI_ELF_SIG_SIZE) {
-	  DSM_PRINT(DEBUG_SIGN,"\nLength of 'e' MPI is too large %#x\n", len);
-	  return -1;
+		DSM_PRINT(DEBUG_SIGN,
+			  "\nLength of 'e' MPI is too large %#x\n", len);
+		return -1;
 	}
 
 	for (i = 0; i < len; i++) {
-	  kernel_read(fd, offset++, &c, 1);
-	  printk("%#x, ", c & 0xff);
-	  raw_public_key_e[i+2] = c;
+		kernel_read(fd, offset++, &c, 1);
+		printk("%#x, ", c & 0xff);
+		raw_public_key_e[i + 2] = c;
 	}
 	printk("}\n");
-	filp_close (fd, 0);
+	filp_close(fd, 0);
 
 	return 0;
 
-} 
-
+}

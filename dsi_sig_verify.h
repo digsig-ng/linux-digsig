@@ -22,9 +22,9 @@
 #include "gnupg/mpi/mpi.h"
 
 
-#define DSI_ELF_SIG_SECTION 0x80736967  /* ((0x80 << 24)|('s' << 16)|('i' << 8)|'g') */
-#define DSI_ELF_SIG_SIZE 512            /* Total signature size */
-#define DSI_ELF_READ_BLOCK_SIZE 1024    /* Signature will be done in chunks of n bytes */
+#define DSI_ELF_SIG_SECTION 0x80736967	/* ((0x80 << 24)|('s' << 16)|('i' << 8)|'g') */
+#define DSI_ELF_SIG_SIZE 512	/* Total signature size */
+#define DSI_ELF_READ_BLOCK_SIZE 1024	/* Signature will be done in chunks of n bytes */
 
 /* 
  * Format of digital signature done by bsign:
@@ -37,8 +37,8 @@
 #define DSI_BSIGN_VERSION    "0.4.5"
 #define DSI_BSIGN_STRING     "#1; bsign v" DSI_BSIGN_VERSION "\n"
 #define DSI_BSIGN_GREET_SIZE sizeof(DSI_BSIGN_STRING)-1
-#define DSI_BSIGN_HASH       20     /* sha1 hash */
-#define DSI_BSIGN_LEN_OFFSET 2      /* length of digsig added by bsign */
+#define DSI_BSIGN_HASH       20	/* sha1 hash */
+#define DSI_BSIGN_LEN_OFFSET 2	/* length of digsig added by bsign */
 #define DSI_BSIGN_INFOS      DSI_BSIGN_GREET_SIZE+DSI_BSIGN_HASH+DSI_BSIGN_LEN_OFFSET
 
 /* GPG .sig file/section structure:
@@ -59,11 +59,10 @@
 
 /*ToDO: makan: this is a constraint, we suppose that the max size of a
   big integer is 1024 bytes. This needs to be modified in order to
-  have a dynamic way of allocating memory. */ 
+  have a dynamic way of allocating memory. */
 
-#define DSI_MPI_MAX_SIZE_N 1024 
-#define DSI_MPI_MAX_SIZE_E 128 
-                                                                                
+#define DSI_MPI_MAX_SIZE_N 1024
+#define DSI_MPI_MAX_SIZE_E 128
 
 /**
  * Supported algorithms
@@ -72,21 +71,23 @@
 #define SIGN_RSA 0
 
 typedef struct sig_ctx_st {
-  struct crypto_tfm *tfm;
-  struct scatterlist sg[1];
-  int digestAlgo;
-  int signAlgo;
-  char *tvmem;
+	struct crypto_tfm *tfm;
+	struct scatterlist sg[1];
+	int digestAlgo;
+	int signAlgo;
+	char *tvmem;
 } SIGCTX;
 
 extern int gDigestLength[1];
 
 SIGCTX *dsi_sign_verify_init(int hashalgo, int signalgo);
-int dsi_sign_verify_update(SIGCTX *ctx, char *buf, int buflen);
-int dsi_sign_verify_final(SIGCTX *ctx, char *sig, int siglen /* PublicKey */, unsigned char *signed_hash );
+int dsi_sign_verify_update(SIGCTX * ctx, char *buf, int buflen);
+int dsi_sign_verify_final(SIGCTX * ctx, char *sig,
+			  int siglen /* PublicKey */ ,
+			  unsigned char *signed_hash);
 void dsi_sign_verify_free(void);
-int dsi_init_pkey(char *pkey_file);
+int dsi_init_pkey(const char read_par);
 
-/* TODO: makan: void dsi_init_pkey(char *pkey_file); */ 
+
 
 #endif

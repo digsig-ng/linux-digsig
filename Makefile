@@ -1,5 +1,5 @@
 obj-m := digsig_verif.o
-digsig_verif-objs := ./dsi_sig_verify.o ./dsi_extract_mpi.o ./digsig.o ./gnupg/mpi/generic/mpih-lshift.o \
+digsig_verif-objs := ./dsi_sig_verify.o ./dsi_dev.o ./digsig.o ./gnupg/mpi/generic/mpih-lshift.o \
 	./gnupg/mpi/generic/mpih-mul1.o ./gnupg/mpi/generic/mpih-mul2.o \
 	./gnupg/mpi/generic/mpih-mul3.o ./gnupg/mpi/generic/mpih-rshift.o \
 	./gnupg/mpi/generic/mpih-sub1.o ./gnupg/mpi/generic/udiv-w-sdiv.o \
@@ -11,12 +11,12 @@ digsig_verif-objs := ./dsi_sig_verify.o ./dsi_extract_mpi.o ./digsig.o ./gnupg/m
 
 clean:
 	@find . \
-	\( -name '*.[oas]' -o -name '*.ko' -o -name '.*.cmd' \
+	\( -name '*.[oas]' -o -name '*.ko' -o -name '.*.cmd' -o -name '*~'\
 	-o -name '.*.d' -o -name '.*.tmp' -o -name '*.mod.c' \) \
 	-type f -print | xargs rm -f
 
 tags:
 	rm -f TAGS
-	@find . | xargs etags -a
+	@find . -name \*.[ch] | xargs etags -a
 
-EXTRA_CFLAGS += -DDSI_DEBUG -DDSI_DIGSIG_DEBUG 
+EXTRA_CFLAGS += -DDSI_DEBUG -DDSI_DIGSIG_DEBUG

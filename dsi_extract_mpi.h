@@ -16,6 +16,7 @@
 #ifndef _DSI_EXTRACT_KEY_H_
 #define _DSI_EXTRACT_KEY_H_
 
-int dsi_get_pkey(unsigned char* raw_public_key_n, unsigned char* raw_public_key_e, char* pkey_file); 
+int dsi_get_pkey(unsigned char *raw_public_key_n,
+		 unsigned char *raw_public_key_e, char *pkey_file);
 
 #endif

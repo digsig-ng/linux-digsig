@@ -25,7 +25,7 @@
 #include "gnupg/cipher/rsa-verify.h"
 #include "dsi_sig_verify.h"
 
-#include "dsi_extract_mpi.h" 
+#include "dsi_extract_mpi.h"
 
 /*
  * Public key format: 2 MPIs
@@ -36,10 +36,10 @@
  */
 
 
-unsigned char raw_public_key_n[DSI_MPI_MAX_SIZE_N]; 
-
-unsigned char raw_public_key_e[DSI_MPI_MAX_SIZE_E];
-
+unsigned char *raw_public_key_n = NULL;
+unsigned char *raw_public_key_e = NULL;
+int dsi_mpi_size_n = 0;
+int dsi_mpi_size_e = 0;
 
 extern int DSIDebugLevel;
 
@@ -55,16 +55,14 @@ static MPI dsi_public_key[2];
 ******************************************************************************/
 
 static int
-dsi_rsa_bsign_verify(unsigned char *sha_cat, int length, unsigned char *signed_hash);
+dsi_rsa_bsign_verify(unsigned char *sha_cat, int length,
+		     unsigned char *signed_hash);
 
-static int 
-dsi_sha1_init(SIGCTX *ctx);
+static int dsi_sha1_init(SIGCTX * ctx);
 
-static void 
-dsi_sha1_update(SIGCTX *ctx, char *buf, int buflen);
+static void dsi_sha1_update(SIGCTX * ctx, char *buf, int buflen);
 
-static int
-dsi_sha1_final(SIGCTX *ctx, char *digest);
+static int dsi_sha1_final(SIGCTX * ctx, char *digest);
 
 
 /******************************************************************************
@@ -79,59 +77,59 @@ static spinlock_t dsi_crypto_alloc_lock = SPIN_LOCK_UNLOCKED;
 
 SIGCTX *dsi_sign_verify_init(int hashalgo, int signalgo)
 {
-  SIGCTX *ctx;
-  unsigned long flags;
+	SIGCTX *ctx;
+	unsigned long flags;
 
-  /* allocating signature context */
-  spin_lock_irqsave(&dsi_crypto_alloc_lock, flags);
-  ctx = (SIGCTX *)kmalloc(sizeof(SIGCTX),GFP_KERNEL);
-  spin_unlock_irqrestore(&dsi_crypto_alloc_lock, flags);
+	/* allocating signature context */
+	spin_lock_irqsave(&dsi_crypto_alloc_lock, flags);
+	ctx = (SIGCTX *) kmalloc(sizeof(SIGCTX), GFP_KERNEL);
+	spin_unlock_irqrestore(&dsi_crypto_alloc_lock, flags);
 
-  if (ctx == NULL){
-    DSM_ERROR("Cannot allocate ctx\n");
-    return NULL;
-  }
+	if (ctx == NULL) {
+		DSM_ERROR("Cannot allocate ctx\n");
+		return NULL;
+	}
 
-  spin_lock_irqsave(&dsi_crypto_alloc_lock, flags);
-  ctx->tvmem = kmalloc(TVMEMSIZE, GFP_KERNEL);
-  spin_unlock_irqrestore(&dsi_crypto_alloc_lock, flags);
+	spin_lock_irqsave(&dsi_crypto_alloc_lock, flags);
+	ctx->tvmem = kmalloc(TVMEMSIZE, GFP_KERNEL);
+	spin_unlock_irqrestore(&dsi_crypto_alloc_lock, flags);
 
-  if (ctx->tvmem == NULL) {
-    kfree(ctx);
-    DSM_ERROR("Cannot allocate plaintext buffer\n");
-    return NULL;
-  }
+	if (ctx->tvmem == NULL) {
+		kfree(ctx);
+		DSM_ERROR("Cannot allocate plaintext buffer\n");
+		return NULL;
+	}
 
-  /* checking hash algorithm is known */
-  switch (hashalgo) {
-  case HASH_SHA1:
-    if (dsi_sha1_init(ctx)) {
-      DSM_ERROR("Initializing SHA1 failed\n");
-      kfree(ctx->tvmem);
-      kfree(ctx);
-      return NULL;
-    }
-    break;
-  default:
-    DSM_ERROR("Unknown hash algo\n");
-    kfree(ctx->tvmem);
-    kfree(ctx);
-    return NULL;
-  }
+	/* checking hash algorithm is known */
+	switch (hashalgo) {
+	case HASH_SHA1:
+		if (dsi_sha1_init(ctx)) {
+			DSM_ERROR("Initializing SHA1 failed\n");
+			kfree(ctx->tvmem);
+			kfree(ctx);
+			return NULL;
+		}
+		break;
+	default:
+		DSM_ERROR("Unknown hash algo\n");
+		kfree(ctx->tvmem);
+		kfree(ctx);
+		return NULL;
+	}
 
-  /* checking sign algo is known */
-  switch (signalgo) {
-  case SIGN_RSA:
-    break;
-  default:
-    DSM_ERROR("Unknown sign algo\n");
-    kfree(ctx->tvmem);
-    kfree(ctx);
-    return NULL;
-  }
-  ctx->digestAlgo = hashalgo;
-  ctx->signAlgo = signalgo;
-  return ctx;
+	/* checking sign algo is known */
+	switch (signalgo) {
+	case SIGN_RSA:
+		break;
+	default:
+		DSM_ERROR("Unknown sign algo\n");
+		kfree(ctx->tvmem);
+		kfree(ctx);
+		return NULL;
+	}
+	ctx->digestAlgo = hashalgo;
+	ctx->signAlgo = signalgo;
+	return ctx;
 }
 
 /******************************************************************************
@@ -142,22 +140,21 @@ Parameters  :
   buflen length of buf
 Return value: 0 normally
 ******************************************************************************/
-int
-dsi_sign_verify_update(SIGCTX *ctx, char *buf, int buflen)
+int dsi_sign_verify_update(SIGCTX * ctx, char *buf, int buflen)
 {
-  switch (ctx->digestAlgo) {
-  case HASH_SHA1:
-    if (ctx == NULL)
-      return -1;
+	switch (ctx->digestAlgo) {
+	case HASH_SHA1:
+		if (ctx == NULL)
+			return -1;
 
-    dsi_sha1_update(ctx, buf, buflen);
-    break;
-  default:
-    DSM_ERROR("dsi_sign_verify_update Unknown hash algo\n");
-    return -1;
-  }
+		dsi_sha1_update(ctx, buf, buflen);
+		break;
+	default:
+		DSM_ERROR("dsi_sign_verify_update Unknown hash algo\n");
+		return -1;
+	}
 
-  return 0;
+	return 0;
 }
 
 /******************************************************************************
@@ -166,36 +163,41 @@ Parameters  :
 Return value: 
 ******************************************************************************/
 int
-dsi_sign_verify_final(SIGCTX *ctx, char *sig, int siglen /* PublicKey */, unsigned char *signed_hash )
+dsi_sign_verify_final(SIGCTX * ctx, char *sig, int siglen /* PublicKey */ ,
+		      unsigned char *signed_hash)
 {
-  char digest[gDigestLength[ctx->digestAlgo]];
-  int rc = -1;
+	char digest[gDigestLength[ctx->digestAlgo]];
+	int rc = -1;
 
-  /* TO DO: check the length of the signature: it should be equal to the length
-     of the modulus */
+	/* TO DO: check the length of the signature: it should be equal to the length
+	   of the modulus */
 
-  if ((rc = dsi_sha1_final(ctx, digest)) < 0) {
-    DSM_ERROR("dsi_sign_verify_final Cannot finalize hash algorithm\n");
-    return rc;
-  }
+	if ((rc = dsi_sha1_final(ctx, digest)) < 0) {
+		DSM_ERROR
+		    ("dsi_sign_verify_final Cannot finalize hash algorithm\n");
+		return rc;
+	}
 
-  if (siglen < gDigestLength[ctx->digestAlgo])
-    return -2;
-  memcpy(sig,digest,gDigestLength[ctx->digestAlgo]);
+	if (siglen < gDigestLength[ctx->digestAlgo])
+		return -2;
+	memcpy(sig, digest, gDigestLength[ctx->digestAlgo]);
 
-  switch (ctx->digestAlgo) {
-  case SIGN_RSA:
-    rc = dsi_rsa_bsign_verify(digest, gDigestLength[ctx->digestAlgo], signed_hash);
-    break;
-  default:
-    DSM_ERROR("Unsupported cipher algorithm in binary digital signature verification\n");
-  }
+	switch (ctx->digestAlgo) {
+	case SIGN_RSA:
+		rc = dsi_rsa_bsign_verify(digest,
+					  gDigestLength[ctx->digestAlgo],
+					  signed_hash);
+		break;
+	default:
+		DSM_ERROR
+		    ("Unsupported cipher algorithm in binary digital signature verification\n");
+	}
 
-  /* free everything */
-  /* do not free SHA1-TFM. For optimization, we choose always to use the same one */
-  kfree(ctx->tvmem);
-  kfree(ctx);
-  return rc;
+	/* free everything */
+	/* do not free SHA1-TFM. For optimization, we choose always to use the same one */
+	kfree(ctx->tvmem);
+	kfree(ctx);
+	return rc;
 }
 
 /******************************************************************************
@@ -207,13 +209,13 @@ Return value:
 ******************************************************************************/
 void dsi_sign_verify_free()
 {
-  if (SHA1_TFM) {
-    crypto_free_tfm(SHA1_TFM);
-    SHA1_TFM = NULL;
-  }
- 
-  /* this might cause unpredictable behavior if structures are refering to this,
-     their pointer might suddenly become NULL, might need a usage count associated */
+	if (SHA1_TFM) {
+		crypto_free_tfm(SHA1_TFM);
+		SHA1_TFM = NULL;
+	}
+
+	/* this might cause unpredictable behavior if structures are refering to this,
+	   their pointer might suddenly become NULL, might need a usage count associated */
 }
 
 /******************************************************************************
@@ -223,32 +225,35 @@ Parameters  :
 Return value:
 ******************************************************************************/
 
-int
-dsi_init_pkey(char *pkey_file)
+int dsi_init_pkey(const char read_par)
 {
 	int nread;
 
-	if (!pkey_file) {
-	  DSM_ERROR("Can not initialize the public key for digsig_verif module!\n"); 
-	  return -1; 
-	}
+	switch (read_par) {
 
-	if (dsi_get_pkey(raw_public_key_n, raw_public_key_e, pkey_file) ){
-	  DSM_PRINT(DEBUG_SIGN, "digsig: Error in reading public key!\n");
-	  DSM_ERROR("Can not read the public key for digsig_verif module!"); 
-	  return -1; 
-	}
+	case 'n':{
+			DSM_PRINT(DEBUG_SIGN,
+				  "Reading raw_public_key_n!\n");
+			nread = dsi_mpi_size_n;
+			dsi_public_key[0] =
+			    mpi_read_from_buffer(raw_public_key_n, &nread,
+						 0);
+			return 0;
+		}
+	case 'e':{
+			DSM_PRINT(DEBUG_SIGN,
+				  "Reading raw_public_key_e!\n");
+			nread = dsi_mpi_size_e;
+			dsi_public_key[1] =
+			    mpi_read_from_buffer(raw_public_key_e, &nread,
+						 0);
+			return 0;
+		}
 
-	DSM_PRINT(DEBUG_SIGN, "Reading raw_public_key_n!\n");
-	nread = DSI_MPI_MAX_SIZE_N;
-	dsi_public_key[0] = mpi_read_from_buffer(raw_public_key_n, &nread, 0);
+	};
 
 
-	DSM_PRINT(DEBUG_SIGN, "Reading raw_public_key_e!\n");
-	nread = DSI_MPI_MAX_SIZE_E;
-	dsi_public_key[1] = mpi_read_from_buffer(raw_public_key_e, &nread, 0);
-
-	return 0;
+	return 0;		/* you never get here ! */
 }
 
 /******************************************************************************
@@ -260,84 +265,89 @@ Return value: 0 - RSA signature is valid
               -1 - an error occured
 ******************************************************************************/
 
-int dsi_rsa_bsign_verify(unsigned char *hash_format, int length, unsigned char *signed_hash)
+int dsi_rsa_bsign_verify(unsigned char *hash_format, int length,
+			 unsigned char *signed_hash)
 {
-  int rc = 0;
-  MPI hash, data;
-  unsigned nread = DSI_ELF_SIG_SIZE;
-  int nframe;
-  unsigned char sig_class;
-  unsigned char sig_timestamp[SIZEOF_UNSIGNED_INT];
-  unsigned long flags;
-  int i;
-  SIGCTX *ctx = NULL;
-  unsigned char new_sig[gDigestLength[HASH_SHA1]];
+	int rc = 0;
+	MPI hash, data;
+	unsigned nread = DSI_ELF_SIG_SIZE;
+	int nframe;
+	unsigned char sig_class;
+	unsigned char sig_timestamp[SIZEOF_UNSIGNED_INT];
+	unsigned long flags;
+	int i;
+	SIGCTX *ctx = NULL;
+	unsigned char new_sig[gDigestLength[HASH_SHA1]];
 
-  /* Get MPI of signed data from .sig file/section */
-  nread = DSI_ELF_SIG_SIZE;
+	/* Get MPI of signed data from .sig file/section */
+	nread = DSI_ELF_SIG_SIZE;
 
-  data = mpi_read_from_buffer(signed_hash+DSI_RSA_DATA_OFFSET, &nread, 0);
+	data =
+	    mpi_read_from_buffer(signed_hash + DSI_RSA_DATA_OFFSET, &nread,
+				 0);
 
-  /* Get MPI for hash */
-  /* bsign modif - file hash - gpg modif */
-  /* bsign modif: add bsign greet at beginning */
-  /* gpg modif:   add class and timestamp at end */
+	/* Get MPI for hash */
+	/* bsign modif - file hash - gpg modif */
+	/* bsign modif: add bsign greet at beginning */
+	/* gpg modif:   add class and timestamp at end */
 
-  spin_lock_irqsave(&dsi_crypto_alloc_lock, flags);
-  ctx = (SIGCTX *)kmalloc(sizeof(SIGCTX),GFP_KERNEL);
-  spin_unlock_irqrestore(&dsi_crypto_alloc_lock, flags);
+	spin_lock_irqsave(&dsi_crypto_alloc_lock, flags);
+	ctx = (SIGCTX *) kmalloc(sizeof(SIGCTX), GFP_KERNEL);
+	spin_unlock_irqrestore(&dsi_crypto_alloc_lock, flags);
 
-  if (ctx == NULL){
-    DSM_ERROR("Cannot allocate ctx\n");
-    return -1;
-  }
+	if (ctx == NULL) {
+		DSM_ERROR("Cannot allocate ctx\n");
+		return -1;
+	}
 
-  spin_lock_irqsave(&dsi_crypto_alloc_lock, flags);
-  ctx->tvmem = kmalloc(TVMEMSIZE, GFP_KERNEL);
-  spin_unlock_irqrestore(&dsi_crypto_alloc_lock, flags);
+	spin_lock_irqsave(&dsi_crypto_alloc_lock, flags);
+	ctx->tvmem = kmalloc(TVMEMSIZE, GFP_KERNEL);
+	spin_unlock_irqrestore(&dsi_crypto_alloc_lock, flags);
 
-  if (ctx->tvmem == NULL) {
-    kfree(ctx);
-    DSM_ERROR("Cannot allocate plaintext buffer\n");
-    return -1;
-  }
+	if (ctx->tvmem == NULL) {
+		kfree(ctx);
+		DSM_ERROR("Cannot allocate plaintext buffer\n");
+		return -1;
+	}
 
-  dsi_sha1_init(ctx);
+	dsi_sha1_init(ctx);
 
-  sig_class = signed_hash[DSI_RSA_CLASS_OFFSET];
-  sig_class &= 0xff;
+	sig_class = signed_hash[DSI_RSA_CLASS_OFFSET];
+	sig_class &= 0xff;
 
-  for (i = 0; i < SIZEOF_UNSIGNED_INT; i++) {
-    sig_timestamp[i] = signed_hash[DSI_RSA_TIMESTAMP_OFFSET + i] & 0xff;
-  }
+	for (i = 0; i < SIZEOF_UNSIGNED_INT; i++) {
+		sig_timestamp[i] =
+		    signed_hash[DSI_RSA_TIMESTAMP_OFFSET + i] & 0xff;
+	}
 
-  if (ctx == NULL)
-    return -1;
+	if (ctx == NULL)
+		return -1;
 
-  dsi_sha1_update(ctx, DSI_BSIGN_STRING, DSI_BSIGN_GREET_SIZE);
-  dsi_sha1_update(ctx, hash_format, SHA1_DIGEST_LENGTH);
-  dsi_sha1_update(ctx, &sig_class, 1);
-  dsi_sha1_update(ctx, sig_timestamp, SIZEOF_UNSIGNED_INT);
+	dsi_sha1_update(ctx, DSI_BSIGN_STRING, DSI_BSIGN_GREET_SIZE);
+	dsi_sha1_update(ctx, hash_format, SHA1_DIGEST_LENGTH);
+	dsi_sha1_update(ctx, &sig_class, 1);
+	dsi_sha1_update(ctx, sig_timestamp, SIZEOF_UNSIGNED_INT);
 
-  if ((rc = dsi_sha1_final(ctx, new_sig)) < 0) {
-    DSM_ERROR("internal_rsa_verify_final Cannot finalize hash algorithm\n");
-    return rc;
-  }
+	if ((rc = dsi_sha1_final(ctx, new_sig)) < 0) {
+		DSM_ERROR
+		    ("internal_rsa_verify_final Cannot finalize hash algorithm\n");
+		return rc;
+	}
 
-  nframe = mpi_get_nbits(dsi_public_key[0]);
-  hash = do_encode_md(new_sig, nframe);
+	nframe = mpi_get_nbits(dsi_public_key[0]);
+	hash = do_encode_md(new_sig, nframe);
 
-  if (hash == MPI_NULL) {
-    DSM_PRINT(DEBUG_SIGN, "mpi creation failed\\n");
-  }
+	if (hash == MPI_NULL) {
+		DSM_PRINT(DEBUG_SIGN, "mpi creation failed\\n");
+	}
 
-  /* Do RSA verification */
-  rc = rsa_verify(hash, &data, dsi_public_key);
+	/* Do RSA verification */
+	rc = rsa_verify(hash, &data, dsi_public_key);
 
-  m_free(hash);
-  m_free(data);
+	m_free(hash);
+	m_free(data);
 
-  return rc;
+	return rc;
 }
 
 
@@ -348,22 +358,21 @@ Parameters  :
 Return value: 0 for successful allocation, -1 for failed
 ******************************************************************************/
 
-static int 
-dsi_sha1_init(SIGCTX *ctx)
+static int dsi_sha1_init(SIGCTX * ctx)
 {
-  if (ctx == NULL)
-    return -1;
+	if (ctx == NULL)
+		return -1;
 
-  if (SHA1_TFM == NULL)
-    SHA1_TFM = crypto_alloc_tfm("sha1",0);
-  ctx->tfm = SHA1_TFM;
-  if (ctx->tfm == NULL) {
-    DSM_ERROR("tfm allocation failed\n");
-    return -1;
-  }
+	if (SHA1_TFM == NULL)
+		SHA1_TFM = crypto_alloc_tfm("sha1", 0);
+	ctx->tfm = SHA1_TFM;
+	if (ctx->tfm == NULL) {
+		DSM_ERROR("tfm allocation failed\n");
+		return -1;
+	}
 
-  crypto_digest_init(ctx->tfm);
-  return 0;
+	crypto_digest_init(ctx->tfm);
+	return 0;
 }
 
 
@@ -373,19 +382,18 @@ Parameters  :
 Return value: void. 
 ******************************************************************************/
 
-static void 
-dsi_sha1_update(SIGCTX *ctx, char *buf, int buflen)
+static void dsi_sha1_update(SIGCTX * ctx, char *buf, int buflen)
 {
-  char *plaintext;
+	char *plaintext;
 
-  memcpy(ctx->tvmem, buf, buflen);
-  plaintext = (void *)ctx->tvmem;
+	memcpy(ctx->tvmem, buf, buflen);
+	plaintext = (void *) ctx->tvmem;
 
-  ctx->sg[0].page = virt_to_page(plaintext);
-  ctx->sg[0].offset = ((long) plaintext & ~PAGE_MASK);
-  ctx->sg[0].length = buflen;
+	ctx->sg[0].page = virt_to_page(plaintext);
+	ctx->sg[0].offset = ((long) plaintext & ~PAGE_MASK);
+	ctx->sg[0].length = buflen;
 
-  crypto_digest_update(ctx->tfm,ctx->sg,1);
+	crypto_digest_update(ctx->tfm, ctx->sg, 1);
 }
 
 /******************************************************************************
@@ -394,15 +402,14 @@ Parameters  :
 Return value: 0 for successful allocation, -1 for failed
 ******************************************************************************/
 
-static int
-dsi_sha1_final(SIGCTX *ctx, char *digest)
+static int dsi_sha1_final(SIGCTX * ctx, char *digest)
 {
-  /* TO DO: check the length of the signature: it should be equal to the length
-     of the modulus */
+	/* TO DO: check the length of the signature: it should be equal to the length
+	   of the modulus */
 
-  if (ctx == NULL)
-    return -1;
+	if (ctx == NULL)
+		return -1;
 
-  crypto_digest_final(ctx->tfm, digest);
-  return 0;
+	crypto_digest_final(ctx->tfm, digest);
+	return 0;
 }

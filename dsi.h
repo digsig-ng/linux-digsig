@@ -23,7 +23,7 @@
 #ifndef __DSI_H
 #define __DSI_H
 
-#ifdef MODULE      
+#ifdef MODULE
 #include <linux/kernel.h>
 #include <linux/interrupt.h>
 #include <linux/pid.h>
@@ -94,53 +94,52 @@
 #define ALARM_SOCKET_GET_PEERNAME   0x00002000
 
 
-#define DSI_DEFAULT_PERM    0 /* permissive mode for structures with no security attached */
+#define DSI_DEFAULT_PERM    0	/* permissive mode for structures with no security attached */
 #define DSI_MAGIC       	0x7754ffa5
 #define DSI_ELF_SID_POS 	7
 
-#ifdef MODULE         /* This prevents user programs that include dsi.h to inherit kernel stuff */
+#ifdef MODULE			/* This prevents user programs that include dsi.h to inherit kernel stuff */
 
 #define DSI_SAFE_ALLOC (in_interrupt () ? GFP_ATOMIC : GFP_KERNEL)
 
 /* This is a hack to avoid using va_lists */
-#define DSM_ERROR(fmt,arg...) printk(DSI_MODULE_NAME" Error - " fmt,##arg);
+#define DSM_ERROR(fmt,arg...) printk(DSI_MODULE_NAME" Error - " fmt,##arg)
 
 /* int dsi_node_id; 
-int dsi_alarm; */ 
+int dsi_alarm; */
 
 typedef struct {
-        int     scid;
-        int     oscid;
-        int     magic;
-        void    *task;
+	int scid;
+	int oscid;
+	int magic;
+	void *task;
 } task_security_t;
 
 
-typedef struct /*inode_security_struct*/ {
-        unsigned long  magic;           /* magic number for this module */
-        struct inode   *inode;           /* back pointer to inode object */
-        int            scid;             /* ScID of creating task */
-        int            task_scid;
-        unsigned int   class;          /* security class of this object */
+typedef struct {		/*inode_security_struct */
+	unsigned long magic;	/* magic number for this module */
+	struct inode *inode;	/* back pointer to inode object */
+	int scid;		/* ScID of creating task */
+	int task_scid;
+	unsigned int class;	/* security class of this object */
 } inode_security_t;
 
 
 typedef struct {
-        unsigned long 	magic;          /* magic number for this module */
-        struct sk_buff  *skb;            /* back pointer */
-        atomic_t     	use;            /* reference count */
-        int 	        scid;            /* Source ScID */
-        int             snid;
+	unsigned long magic;	/* magic number for this module */
+	struct sk_buff *skb;	/* back pointer */
+	atomic_t use;		/* reference count */
+	int scid;		/* Source ScID */
+	int snid;
 } sk_buff_security_t;
 
-#include "dsi_debug.h"       /* Include this file first since it contains DSM_PRINT macro */
+#include "dsi_debug.h"		/* Include this file first since it contains DSM_PRINT macro */
 
 /* Not necessary for RSA verification
 #include "dsi_cache.h"
 #include "dsi_access_control.h"
 */
 
-#endif /* MODULE */
+#endif				/* MODULE */
 
 #endif
-

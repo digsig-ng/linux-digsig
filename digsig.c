@@ -29,22 +29,23 @@
 #include <linux/personality.h>
 #include <linux/elf.h>
 #include <linux/fs.h>
-#include <linux/namei.h>
 #include <asm/uaccess.h>
 #include <linux/security.h>
+#include <linux/dcache.h>
 
 #include "dsi_sig_verify.h"
-#include "gnupg/mpi/mpi.h" 
-#include "gnupg/cipher/rsa-verify.h" 
+#include "gnupg/mpi/mpi.h"
+#include "gnupg/cipher/rsa-verify.h"
 #include "dsi_debug.h"
 #include "dsi.h"
+#include "dsi_dev.h"
 
 
 #ifdef DSI_DIGSIG_DEBUG
-#define DIGSIG_MODE 0 /*permissive  mode*/ 
+#define DIGSIG_MODE 0		/*permissive  mode */
 #else
-#define DIGSIG_MODE -ENOEXEC /*restrictive mode*/
-#endif   
+#define DIGSIG_MODE -EPERM	/*restrictive mode */
+#endif
 
 
 /*
@@ -55,34 +56,36 @@ extern MPI *dsi_public_key[2];
 
 /* Allocate and free functions for each kind of security blob. */
 static spinlock_t dsi_bprm_alloc_lock = SPIN_LOCK_UNLOCKED;
+extern int device_file_major;
+struct file_operations dsi_fops = {
+	owner:THIS_MODULE,
+	write:dsi_write,
+};
 
-static char *pkey_file = NULL;
+/* Indicate if module as key or not */
+int g_init = 0;
 
-int DSIDebugLevel = DEBUG_SYS_SECURITY | DEBUG_SIGN;
+int DSIDebugLevel = DEBUG_INIT | DEBUG_DEV | DEBUG_SIGN;
 struct security_operations dsi_security_ops;
 
 #define set_dsi_ops(ops, function)				\
 		if (!ops->function) {				\
 			ops->function = dsi_##function;		\
-                } 
+                }
 
 
 /*
  * Internal functions
  */
 
-static char *
-dsi_find_signature(struct elfhdr *elf_ex, 
-		   Elf32_Shdr *elf_shdata, 
-		   struct file *file, 
-		   int *sh_offset); 
+static char *dsi_find_signature(struct elfhdr *elf_ex,
+				Elf32_Shdr * elf_shdata,
+				struct file *file, int *sh_offset);
 
 static int
-dsi_verify_signature(char *filename, 
-		     Elf32_Shdr * elf_shdata, 
-		     char *sig_orig,
-		     struct file *file, 
-		     int sh_offset); 
+dsi_verify_signature(char *filename,
+		     Elf32_Shdr * elf_shdata,
+		     char *sig_orig, struct file *file, int sh_offset);
 
 
 /******************************************************************************
@@ -98,52 +101,62 @@ Return value: Upon suscess: buffer containing signature (size of signature is fi
               depending on algorithm used)
               Failure: null pointer 
 ******************************************************************************/
-static char *
-dsi_find_signature(struct elfhdr *elf_ex, Elf32_Shdr *elf_shdata, struct file *file, int *sh_offset)
+static char *dsi_find_signature(struct elfhdr *elf_ex,
+				Elf32_Shdr * elf_shdata, struct file *file,
+				int *sh_offset)
 {
-  int i = 0;
-  int retval;
-  unsigned long flags;
-  char *buffer = NULL;
+	int i = 0;
+	int retval;
+	unsigned long flags;
+	char *buffer = NULL;
 
-  i = 0;
+	i = 0;
 
-  
-  while (i < elf_ex->e_shnum && elf_shdata[i].sh_type != DSI_ELF_SIG_SECTION) {
-    i++;
-  }
 
-  if (elf_shdata[i].sh_type == DSI_ELF_SIG_SECTION) {
-    DSM_PRINT(DEBUG_SIGN, "dsi_bprm_compute_creds: Found signature section\n");
+	while (i < elf_ex->e_shnum
+	       && elf_shdata[i].sh_type != DSI_ELF_SIG_SECTION) {
+		i++;
+	}
 
-    /* Now get DSI_ELF_SIG_SIZE bytes of signature section */
-    
-    if (elf_shdata[i].sh_size != DSI_ELF_SIG_SIZE) {
-      DSM_PRINT(DEBUG_SIGN, "dsi_bprm_compute_creds: Signature section is not %u bytes\n",
-		DSI_ELF_SIG_SECTION);
-      return NULL;
-    }
+	if (elf_shdata[i].sh_type == DSI_ELF_SIG_SECTION) {
+		DSM_PRINT(DEBUG_SIGN,
+			  "dsi_bprm_compute_creds: Found signature section\n");
 
-    spin_lock_irqsave(&dsi_bprm_alloc_lock, flags);
-    buffer = (char *) kmalloc(DSI_ELF_SIG_SIZE, DSI_SAFE_ALLOC);
-    spin_unlock_irqrestore(&dsi_bprm_alloc_lock, flags);
-    
-    if (!buffer) {
-      DSM_PRINT(DEBUG_SIGN, "dsi_bprm_compute_creds: Cannot allocate memory for signature buffer.\n");
-      return NULL;
-    }
+		/* Now get DSI_ELF_SIG_SIZE bytes of signature section */
 
-    retval = kernel_read(file, elf_shdata[i].sh_offset, (char *) buffer, DSI_ELF_SIG_SIZE);
-    if (retval < 0 || retval != DSI_ELF_SIG_SIZE) {
-      DSM_PRINT(DEBUG_SIGN, "dsi_bprm_compute_creds: Unable to read signature: %d\n", retval);
-      kfree(buffer);
-      return NULL;
-    }
+		if (elf_shdata[i].sh_size != DSI_ELF_SIG_SIZE) {
+			DSM_PRINT(DEBUG_SIGN,
+				  "dsi_bprm_compute_creds: Signature section is not %u bytes\n",
+				  DSI_ELF_SIG_SECTION);
+			return NULL;
+		}
 
-    *sh_offset = elf_shdata[i].sh_offset;
-    }
+		spin_lock_irqsave(&dsi_bprm_alloc_lock, flags);
+		buffer =
+		    (char *) kmalloc(DSI_ELF_SIG_SIZE, DSI_SAFE_ALLOC);
+		spin_unlock_irqrestore(&dsi_bprm_alloc_lock, flags);
 
-  return buffer;
+		if (!buffer) {
+			DSM_PRINT(DEBUG_SIGN,
+				  "dsi_bprm_compute_creds: Cannot allocate memory for signature buffer.\n");
+			return NULL;
+		}
+
+		retval =
+		    kernel_read(file, elf_shdata[i].sh_offset,
+				(char *) buffer, DSI_ELF_SIG_SIZE);
+		if (retval < 0 || retval != DSI_ELF_SIG_SIZE) {
+			DSM_PRINT(DEBUG_SIGN,
+				  "dsi_bprm_compute_creds: Unable to read signature: %d\n",
+				  retval);
+			kfree(buffer);
+			return NULL;
+		}
+
+		*sh_offset = elf_shdata[i].sh_offset;
+	}
+
+	return buffer;
 }
 
 /******************************************************************************
@@ -157,87 +170,106 @@ Parameters  :
 Return value: 0 for false or 1 for true or -1 for error
 ******************************************************************************/
 static int
-dsi_verify_signature(char *filename, Elf32_Shdr * elf_shdata, char *sig_orig, struct file *file, int sh_offset)
+dsi_verify_signature(char *filename, Elf32_Shdr * elf_shdata,
+		     char *sig_orig, struct file *file, int sh_offset)
 {
-  char *sig_result, *read_blocks;
-  mm_segment_t old_fs;
-  int retval, offset;
-  struct kstat stat;
-  unsigned int size;
-  unsigned int lower, upper;
-  unsigned long flags;
-  SIGCTX *ctx;
+	char *sig_result, *read_blocks;
+	mm_segment_t old_fs;
+	int retval, offset;
+	struct kstat stat;
+	unsigned int size;
+	unsigned int lower, upper;
+	unsigned long flags;
+	SIGCTX *ctx;
 
-  /* Get file size from file system */
-  old_fs = get_fs();
-  set_fs(get_ds());
-  retval = vfs_stat(filename, &stat);
-  set_fs(old_fs);
+	/* Get file size from file system */
+	old_fs = get_fs();
+	set_fs(get_ds());
+	retval = vfs_stat(filename, &stat);
+	set_fs(old_fs);
 
-  if (retval) {
-    DSM_PRINT(DEBUG_SIGN, "dsi_bprm_compute_creds Unable to stat file %s: %d\n", filename, retval);
-    return -1;
-  }
+	if (retval) {
+		DSM_PRINT(DEBUG_SIGN,
+			  "dsi_bprm_compute_creds Unable to stat file %s: %d\n",
+			  filename, retval);
+		return -ENOENT;
+	}
 
-  if ((ctx = dsi_sign_verify_init(HASH_SHA1,SIGN_RSA)) == NULL){
-    DSM_PRINT(DEBUG_SIGN, "dsi_bprm_compute_creds Cannot allocate crypto context.\n");
-    return -1;
-  }
+	if ((ctx = dsi_sign_verify_init(HASH_SHA1, SIGN_RSA)) == NULL) {
+		DSM_PRINT(DEBUG_SIGN,
+			  "dsi_bprm_compute_creds Cannot allocate crypto context.\n");
+		return -ENOMEM;
+	}
 
-  spin_lock_irqsave(&dsi_bprm_alloc_lock, flags);
-  sig_result = (char *) kmalloc(DSI_ELF_SIG_SIZE, DSI_SAFE_ALLOC);
-  read_blocks = (char *) kmalloc(DSI_ELF_READ_BLOCK_SIZE, DSI_SAFE_ALLOC);
-  spin_unlock_irqrestore(&dsi_bprm_alloc_lock, flags);
+	spin_lock_irqsave(&dsi_bprm_alloc_lock, flags);
+	sig_result = (char *) kmalloc(DSI_ELF_SIG_SIZE, DSI_SAFE_ALLOC);
+	read_blocks =
+	    (char *) kmalloc(DSI_ELF_READ_BLOCK_SIZE, DSI_SAFE_ALLOC);
+	spin_unlock_irqrestore(&dsi_bprm_alloc_lock, flags);
 
-  if (!sig_result || !read_blocks) {
-    DSM_PRINT(DEBUG_SIGN, "dsi_bprm_compute_creds Cannot allocate memory for buffers.\n");
-    return -1;
-  }
+	if (!sig_result || !read_blocks) {
+		DSM_PRINT(DEBUG_SIGN,
+			  "dsi_bprm_compute_creds Cannot allocate memory for buffers.\n");
+		return -ENOMEM;
+	}
 
-  memset(sig_result, 0, DSI_ELF_SIG_SIZE);
+	memset(sig_result, 0, DSI_ELF_SIG_SIZE);
 
-  for (offset = 0; offset < stat.size; offset += DSI_ELF_READ_BLOCK_SIZE) {
+	for (offset = 0; offset < stat.size;
+	     offset += DSI_ELF_READ_BLOCK_SIZE) {
 
-    size = kernel_read(file, offset, (char *) read_blocks, DSI_ELF_READ_BLOCK_SIZE);
-    if (size <= 0) {
-      DSM_PRINT(DEBUG_SIGN, "dsi_bprm_compute_creds Unable to read signature in blocks: %d\n", size);
-      kfree(sig_result);
-      kfree(read_blocks);
-      return -1;
-    }
+		size =
+		    kernel_read(file, offset, (char *) read_blocks,
+				DSI_ELF_READ_BLOCK_SIZE);
+		if (size <= 0) {
+			DSM_PRINT(DEBUG_SIGN,
+				  "dsi_bprm_compute_creds Unable to read signature in blocks: %d\n",
+				  size);
+			kfree(sig_result);
+			kfree(read_blocks);
+			return -1;
+		}
 
-    /* Must zero out signature section to match bsign mechanism */
-    lower = sh_offset ;                     /* lower bound of memset */
-    upper = sh_offset + DSI_ELF_SIG_SIZE;   /* upper bound */
+		/* Must zero out signature section to match bsign mechanism */
+		lower = sh_offset;	/* lower bound of memset */
+		upper = sh_offset + DSI_ELF_SIG_SIZE;	/* upper bound */
 
-    if ((lower < offset + DSI_ELF_READ_BLOCK_SIZE) &&
-	(offset < upper)) {
-      lower = (offset > lower) ? offset : lower;
-      upper = (offset + DSI_ELF_READ_BLOCK_SIZE < upper) ? offset + DSI_ELF_READ_BLOCK_SIZE : upper;
+		if ((lower < offset + DSI_ELF_READ_BLOCK_SIZE) &&
+		    (offset < upper)) {
+			lower = (offset > lower) ? offset : lower;
+			upper =
+			    (offset + DSI_ELF_READ_BLOCK_SIZE <
+			     upper) ? offset +
+			    DSI_ELF_READ_BLOCK_SIZE : upper;
 
-      memset(read_blocks + (lower - offset), 0, upper - lower);
-    }
+			memset(read_blocks + (lower - offset), 0,
+			       upper - lower);
+		}
 
-    /* continue verification loop */
-    if (dsi_sign_verify_update(ctx, read_blocks, size) != 0) {
-      DSM_PRINT(DEBUG_SIGN, "dsi_bprm_compute_creds Error updating crypto verification\n");
-      kfree(sig_result);
-      kfree(read_blocks);
-      return -1;
-    }
-  }
+		/* continue verification loop */
+		if (dsi_sign_verify_update(ctx, read_blocks, size) != 0) {
+			DSM_PRINT(DEBUG_SIGN,
+				  "dsi_bprm_compute_creds Error updating crypto verification\n");
+			kfree(sig_result);
+			kfree(read_blocks);
+			return -1;
+		}
+	}
 
-  /* A bit of bsign formatting else hashes won't match, works with bsign v0.4.4 */
-  if ( (retval = dsi_sign_verify_final(ctx, sig_result, DSI_ELF_SIG_SIZE, sig_orig+DSI_BSIGN_INFOS)) < 0) {
-    DSM_PRINT(DEBUG_SIGN, "dsi_bprm_compute_creds Error calculating final crypto verification\n");
-    kfree(sig_result);
-    kfree(read_blocks);
-    return -1;
-  }
+	/* A bit of bsign formatting else hashes won't match, works with bsign v0.4.4 */
+	if ((retval =
+	     dsi_sign_verify_final(ctx, sig_result, DSI_ELF_SIG_SIZE,
+				   sig_orig + DSI_BSIGN_INFOS)) < 0) {
+		DSM_PRINT(DEBUG_SIGN,
+			  "dsi_bprm_compute_creds Error calculating final crypto verification\n");
+		kfree(sig_result);
+		kfree(read_blocks);
+		return -1;
+	}
 
-  kfree(sig_result);
-  kfree(read_blocks);
-  return retval;
+	kfree(sig_result);
+	kfree(read_blocks);
+	return retval;
 }
 
 /******************************************************************************
@@ -263,162 +295,178 @@ Parameters  :
 Return value: 
 ******************************************************************************/
 
-int
-dsi_bprm_check_security(struct linux_binprm *bprm)
+int dsi_bprm_check_security(struct linux_binprm *bprm)
 {
-  struct elfhdr elf_ex;
-  int retval, sh_offset;
-  unsigned int size;
-  Elf32_Shdr * elf_shdata;
-  struct file * file;
-  unsigned long flags;
-  char *sig_orig;
-		
-  DSM_PRINT(DEBUG_SIGN, "binary is %s\n", bprm->filename);
+	struct elfhdr elf_ex;
+	int retval, sh_offset;
+	unsigned int size;
+	Elf32_Shdr *elf_shdata;
+	struct file *file;
+	unsigned long flags;
+	char *sig_orig;
+	long exec_time;
 
-  file = filp_open(bprm->filename, O_RDONLY, 0);
-  if (!file && IS_ERR(file)) {
-    DSM_ERROR("dsi_bprm_compute_creds: Problem opening file!\n");
-    retval =  DIGSIG_MODE;
-    goto out_file;
-  }
+	if (!g_init)
+		return 0;
 
-  if (!file->f_op || !file->f_op->mmap) {
-    DSM_ERROR("dsi_bprm_compute_creds: Not allowed to read file\n");
-    retval = DIGSIG_MODE;
-    goto out_file;
-  }
-  
-  /* Get the exec-header, the original bprm->buf is no longer reliable at this point */
-  kernel_read(file,0,bprm->buf,BINPRM_BUF_SIZE);
-  elf_ex = *((struct elfhdr *) bprm->buf);
-  
-  if (memcmp(elf_ex.e_ident, ELFMAG, SELFMAG) != 0) {
-    DSM_PRINT(DEBUG_SIGN, "dsi_bprm_compute_creds: Binary is not elf format\n");
-    retval = 0; // ToDO: Makan, we decide to let go the not elf binaries.
-    // ?? This is not obvious, we cannot sign a non-elf binary, should
-    // we only check elf files and not execute the non-elf
-    // binaries????
-    goto out_file;
-  }
-  
-  if (elf_ex.e_type != ET_EXEC && elf_ex.e_type != ET_DYN) {
-    DSM_PRINT(DEBUG_SIGN, "dsi_bprm_compute_creds: Binary is not executable\n");
-    retval = 0; // ToDO: Makan, we decide to let go the not executable binaries. 
-    goto out_file;
-  }
+	if (!DIGSIG_MODE)	// measure exec time only on DEBUG mode. 
+		exec_time = jiffies;
 
-  /* Now read in all of the section header entries */
-  if (!elf_ex.e_shoff) {
-    DSM_ERROR("dsi_bprm_compute_creds: No section header!\n");
-    retval = DIGSIG_MODE;
-    goto out_file;
-  }
+	DSM_PRINT(DEBUG_SIGN, "binary is %s\n", bprm->filename);
 
-  if (elf_ex.e_shentsize != sizeof(Elf32_Shdr)) {
-    DSM_ERROR("dsi_bprm_compute_creds: Section header is wrong size!\n");
-    retval = DIGSIG_MODE;
-    goto out_file;
-  }
+	file = filp_open(bprm->filename, O_RDONLY, 0);
+	if (!file && IS_ERR(file)) {
+		DSM_ERROR
+		    ("dsi_bprm_compute_creds: Problem opening file!\n");
+		retval = DIGSIG_MODE;
+		goto out_file;
+	}
 
-  if (elf_ex.e_shnum > 65536U / sizeof(Elf32_Shdr)) {
-    DSM_ERROR("dsi_bprm_compute_creds: Too many entries in Section Header!\n");
-    retval = DIGSIG_MODE;
-    goto out_file;
-  }
+	if (!file->f_op || !file->f_op->mmap) {
+		DSM_ERROR
+		    ("dsi_bprm_compute_creds: Not allowed to read file\n");
+		retval = DIGSIG_MODE;
+		goto out_file;
+	}
 
-  size = elf_ex.e_shnum * sizeof(Elf32_Shdr);
+	/* Get the exec-header, the original bprm->buf is no longer reliable at this point */
+	kernel_read(file, 0, bprm->buf, BINPRM_BUF_SIZE);
+	elf_ex = *((struct elfhdr *) bprm->buf);
 
-  spin_lock_irqsave(&dsi_bprm_alloc_lock, flags);
-  elf_shdata = (Elf32_Shdr *) kmalloc(size, DSI_SAFE_ALLOC);
-  spin_unlock_irqrestore(&dsi_bprm_alloc_lock, flags);
+	if (memcmp(elf_ex.e_ident, ELFMAG, SELFMAG) != 0) {
+		DSM_PRINT(DEBUG_SIGN,
+			  "dsi_bprm_compute_creds: Binary is not elf format\n");
+		retval = 0;	// ToDO: Makan, we decide to let go the not elf binaries.
+		// ?? This is not obvious, we cannot sign a non-elf binary, should
+		// we only check elf files and not execute the non-elf
+		// binaries????
+		goto out_file;
+	}
 
-  if (!elf_shdata) {
-    DSM_ERROR("dsi_bprm_compute_creds: Cannot allocate memory to read Section Header\n");
-    retval = DIGSIG_MODE;
-    goto out_file;
-  }
+	if (elf_ex.e_type != ET_EXEC && elf_ex.e_type != ET_DYN) {
+		DSM_PRINT(DEBUG_SIGN,
+			  "dsi_bprm_compute_creds: Binary is not executable\n");
+		retval = 0;	// ToDO: Makan, we decide to let go the not executable binaries. 
+		goto out_file;
+	}
 
-  retval = kernel_read(file, elf_ex.e_shoff, (char *) elf_shdata, size);
+	/* Now read in all of the section header entries */
+	if (!elf_ex.e_shoff) {
+		DSM_ERROR("dsi_bprm_compute_creds: No section header!\n");
+		retval = DIGSIG_MODE;
+		goto out_file;
+	}
 
-  if (retval < 0 || retval != size) {
-    DSM_ERROR("dsi_bprm_compute_creds: Unable to read binary %s: %d\n", bprm->filename, retval);
-    kfree(elf_shdata);
-    retval = DIGSIG_MODE;
-    goto out_file;
-  }
+	if (elf_ex.e_shentsize != sizeof(Elf32_Shdr)) {
+		DSM_ERROR
+		    ("dsi_bprm_compute_creds: Section header is wrong size!\n");
+		retval = DIGSIG_MODE;
+		goto out_file;
+	}
 
-  /* Find signature section */
-  if ((sig_orig = dsi_find_signature(&elf_ex, elf_shdata, file, &sh_offset)) == NULL) {
-    kfree(sig_orig);     /* sig_orig now points to allocated memory
-			    after internal_find_signature */
-    retval = DIGSIG_MODE;
-    goto out_file;
-  }
+	if (elf_ex.e_shnum > 65536U / sizeof(Elf32_Shdr)) {
+		DSM_ERROR
+		    ("dsi_bprm_compute_creds: Too many entries in Section Header!\n");
+		retval = DIGSIG_MODE;
+		goto out_file;
+	}
 
-  /* Verify binary's signature */
-  retval = dsi_verify_signature(bprm->filename, elf_shdata, sig_orig, file, sh_offset);
+	size = elf_ex.e_shnum * sizeof(Elf32_Shdr);
 
-  if (!retval) {
-    DSM_PRINT(DEBUG_SIGN, "dsi_bprm_compute_creds: Signature verification successful\n");
-  } else if (retval > 0) {
-    DSM_PRINT(DEBUG_SIGN, "dsi_bprm_compute_creds: Signatures do not match\n");
-    retval = -1;
-  } else {
-    DSM_PRINT(DEBUG_SIGN, "dsi_bprm_compute_creds: Signature verification failed because of errors: %d\n", retval);
-    retval = -1;
-  }
+	spin_lock_irqsave(&dsi_bprm_alloc_lock, flags);
+	elf_shdata = (Elf32_Shdr *) kmalloc(size, DSI_SAFE_ALLOC);
+	spin_unlock_irqrestore(&dsi_bprm_alloc_lock, flags);
 
-  kfree(sig_orig);
+	if (!elf_shdata) {
+		DSM_ERROR
+		    ("dsi_bprm_compute_creds: Cannot allocate memory to read Section Header\n");
+		retval = DIGSIG_MODE;
+		goto out_file;
+	}
 
- out_file:
-  filp_close(file, 0); 
-  return retval;
+	retval =
+	    kernel_read(file, elf_ex.e_shoff, (char *) elf_shdata, size);
+
+	if (retval < 0 || retval != size) {
+		DSM_ERROR
+		    ("dsi_bprm_compute_creds: Unable to read binary %s: %d\n",
+		     bprm->filename, retval);
+		kfree(elf_shdata);
+		retval = DIGSIG_MODE;
+		goto out_file;
+	}
+
+	/* Find signature section */
+	if ((sig_orig =
+	     dsi_find_signature(&elf_ex, elf_shdata, file,
+				&sh_offset)) == NULL) {
+		kfree(sig_orig);	/* sig_orig now points to allocated memory
+					   after internal_find_signature */
+		retval = DIGSIG_MODE;
+		goto out_file;
+	}
+
+	/* Verify binary's signature */
+	retval =
+	    dsi_verify_signature(bprm->filename, elf_shdata, sig_orig,
+				 file, sh_offset);
+
+	if (!retval) {
+		DSM_PRINT(DEBUG_SIGN,
+			  "dsi_bprm_compute_creds: Signature verification successful\n");
+	} else if (retval > 0) {
+		DSM_PRINT(DEBUG_SIGN,
+			  "dsi_bprm_compute_creds: Signatures do not match\n");
+		retval = -EPERM;
+	} else {
+		DSM_PRINT(DEBUG_SIGN,
+			  "dsi_bprm_compute_creds: Signature verification failed because of errors: %d\n",
+			  retval);
+		retval = -EPERM;
+	}
+
+	kfree(sig_orig);
+
+      out_file:
+	filp_close(file, 0);
+
+	if (!DIGSIG_MODE)	// measure exec time only on DEBUG mode. 
+		exec_time = jiffies - exec_time;
+	/* DSM_PRINT(DEBUG_SIGN, "Time to execute dsi_bprm_check_security on %s is %li\n", bprm->filename, exec_time); */
+
+	return retval;
 }
-
 
 
 void security_set_operations(struct security_operations *ops)
 {
-  set_dsi_ops(ops, bprm_check_security);
+	set_dsi_ops(ops, bprm_check_security);
+
 }
 
-
-module_param(pkey_file, charp, 000);
 
 static int __init digsig_init_module(void)
 {
 	int err = 0;
-	struct nameidata nd;
 
 	DSM_PRINT(DEBUG_INIT, "Initializing module\n");
-	/* Initialize public key */
-
-	DSM_PRINT(DEBUG_SIGN, "Public key in %s\n", pkey_file);
-	if (pkey_file == NULL) {
-		DSM_ERROR ("digsig: Invalid file name ! \n");	  
-		return -1;
-	}
-
-	if (path_lookup(pkey_file, LOOKUP_FOLLOW, &nd)){
-		DSM_ERROR ("digsig: File does not exist %s ! \n", pkey_file);
-		return -1;
-	}
-
-	DSM_PRINT(DEBUG_SIGN, "Public key in %s\n", pkey_file);
-
-	if (dsi_init_pkey (pkey_file)) {
-		DSM_ERROR ("Error in dsi_init_pkey\n");
-		return -1;
-	}
 
 	/* initialize DSI's hooks */
 	security_set_operations(&dsi_security_ops);
 
 	/* register */
 	if ((err = register_security(&dsi_security_ops))) {
-		DSM_ERROR("< dsi_init_module():Wrong security parameter\n");
+		DSM_ERROR
+		    ("< dsi_init_module():Wrong security parameter\n");
 		return err;
+	}
+
+	/* Opening Device interface /dev/dsi_module */
+	device_file_major = register_chrdev(0, "Digsig_module", &dsi_fops);
+	if (device_file_major < 0) {
+		DSM_ERROR
+		    ("< dsi_init_module(): Can't get a device major number\n");
+		return device_file_major;
 	}
 
 	return 0;
@@ -426,19 +474,17 @@ static int __init digsig_init_module(void)
 
 static void __exit digsig_exit_module(void)
 {
-  DSM_PRINT(DEBUG_INIT, "Deinitializing module\n");
-  dsi_sign_verify_free();
-  
-  unregister_security(&dsi_security_ops);
+	DSM_PRINT(DEBUG_INIT, "Deinitializing module\n");
+	dsi_sign_verify_free();
+	unregister_chrdev(device_file_major, "Digsig_module");
+	unregister_security(&dsi_security_ops);
 }
 
-module_init (digsig_init_module);
-module_exit (digsig_exit_module);
+module_init(digsig_init_module);
+module_exit(digsig_exit_module);
 
 /* see linux/module.h */
-MODULE_LICENSE("GPL"); 
+MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Distributed Security Infrastructure Module");
 MODULE_AUTHOR("DSI Team sourceforge.net/projects/disec");
 MODULE_SUPPORTED_DEVICE("DSI_module");
-
-
