@@ -1,6 +1,21 @@
+1.0
+===
+
+	- the verification of signatures for the shared binaries has been
+	added. 
+	
+0.3
+===
+
+	- use sysfs to connect to the module instead of the char device 
+	
 0.2 
 === 
-	- the main change is that we now use a script to launch the module, the module doesn't read the public key file. We use a small c program to read the public key and feed it into the module using a char device.
+
+	- the main change is that we now use a script to launch the
+	module, the module doesn't read the public key file. We use a
+	small c program to read the public key and feed it into the module
+	using a char device.
 
 
 

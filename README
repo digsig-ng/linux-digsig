@@ -33,6 +33,27 @@ We integrated the the Tom St-denis's crypto library at
 http://math.libtomcrypt.org/ to digsig.  It's now possible to use it if
 you define digsig-ltm in the Makefile.
 
+INSTALL
+=========== 
+
+To compile Digsig from the directory you installed Digsig do: 
+[root@digsig]# ./digsig.init compile
+
+
+You can set different compilation arguments in Makefile: 
+
+ -DDSI_DEBUG: This allows to print the debug messages to
+/var/log/messages.
+
+ -DDSI_DIGSIG_DEBUG: When this variable is set Digsig will run in
+debug mode.  In debug mode, DigSig lets unsigned binaries run. This
+state is ideal to test DigSig, and also list the binaries you need to
+sign to get a fully operational system.
+
+ -DDSI_EXEC_ONLY: DigSig normally checks the signatures for shared
+binaries. If you wish for performance reason or whatever other reason
+to only verify the signatures executable binaries set this variable. 
+
 Requirements:
 ==============
 
@@ -61,17 +82,25 @@ Micro tests with gnupg:
 We present below the overhead at kernel-level for checking the
 signature.
 
+In below, we give the performances for DigSig running with the
+variable DSI_EXEC_ONLY set. This means that we only measure the time
+for verifying the signature of the executable binary and do not take
+into accoubt the time necessary to verify the signatures for the
+shared libraries. 
+
 Always on a Pentium IV, 2.4 GHz, 500 mega bytes of memory, running
 Linux 2.5.66: 
 
-Executable         size         time
-======================================= 
-ls                 67668         1.75
-ps                 69772         1.8
-ssh                227256        4.1
-bash               626028        9.35
-vim                1893740       27.3
-emacs              4093052       57.85
++-----------+---------+----------+
+| Binaries  |   Size  |  GnuPG   |
++-----------+---------+----------+
+|        ls |   68230 |  1.61765 |
+|        ps |   70337 |  1.67742 |
+|   busybox |  248801 |  4.66666 |
+|       cvs |  672532 | 11.53571 |
+|       vim | 1894305 | 31.25000 |
+|     emacs | 4093614 | 67.41176 |
++-----------+---------+----------+
 
 Time is in jiffies -> 1 jiffies = 1ms
 

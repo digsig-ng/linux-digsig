@@ -12,8 +12,8 @@
  *      (at your option) any later version.
  *
  * Author: David Gordon Aug 2003 
- * modifs: Makan Pourzandi Sep 2003 
- *         Vincent Roy Sep 2003 
+ * modifs: Makan Pourzandi Sep 2003 - Nov 2003 
+ *         Vincent Roy Sep 2003 - Nov 2003, add functionality for mmap  
  */
 
 
@@ -91,8 +91,7 @@ static char *dsi_find_signature(struct elfhdr *elf_ex,
 				struct file *file, int *sh_offset);
 
 static int
-dsi_verify_signature(char *filename,
-		     Elf32_Shdr * elf_shdata,
+dsi_verify_signature(Elf32_Shdr * elf_shdata,
 		     char *sig_orig, struct file *file, int sh_offset);
 
 
@@ -127,13 +126,13 @@ static char *dsi_find_signature(struct elfhdr *elf_ex,
 
 	if (elf_shdata[i].sh_type == DSI_ELF_SIG_SECTION) {
 		DSM_PRINT(DEBUG_SIGN,
-			  "dsi_bprm_compute_creds: Found signature section\n");
+			  "dsi_find_signature: Found signature section\n");
 
 		/* Now get DSI_ELF_SIG_SIZE bytes of signature section */
 
 		if (elf_shdata[i].sh_size != DSI_ELF_SIG_SIZE) {
 			DSM_PRINT(DEBUG_SIGN,
-				  "dsi_bprm_compute_creds: Signature section is not %u bytes\n",
+				  "dsi_find_signature: Signature section is not %u bytes\n",
 				  DSI_ELF_SIG_SECTION);
 			return NULL;
 		}
@@ -148,7 +147,7 @@ static char *dsi_find_signature(struct elfhdr *elf_ex,
 				     (char *) buffer, DSI_ELF_SIG_SIZE);
 		if ((retval < 0) || (retval != DSI_ELF_SIG_SIZE)) {
 			DSM_PRINT(DEBUG_SIGN,
-				  "dsi_bprm_compute_creds: Unable to read signature: %d\n",
+				  "dsi_find_signature: Unable to read signature: %d\n",
 				  retval);
 			kfree(buffer);
 			return NULL;
@@ -171,7 +170,7 @@ Parameters  :
 Return value: 0 for false or 1 for true or -1 for error
 ******************************************************************************/
 static int
-dsi_verify_signature(char *filename, Elf32_Shdr * elf_shdata,
+dsi_verify_signature(Elf32_Shdr * elf_shdata,
 		     char *sig_orig, struct file *file, int sh_offset)
 {
 	char *sig_result, *read_blocks;
@@ -183,7 +182,7 @@ dsi_verify_signature(char *filename, Elf32_Shdr * elf_shdata,
 	down (&dsi_digsig_sem);
 	if ((ctx = dsi_sign_verify_init(HASH_SHA1, SIGN_RSA)) == NULL) {
 		DSM_PRINT(DEBUG_SIGN,
-			  "dsi_bprm_compute_creds Cannot allocate crypto context.\n");
+			  "dsi_verify_signature Cannot allocate crypto context.\n");
 		up (&dsi_digsig_sem);
 		return -ENOMEM;
 	}
@@ -210,7 +209,7 @@ dsi_verify_signature(char *filename, Elf32_Shdr * elf_shdata,
 				   DSI_ELF_READ_BLOCK_SIZE);
 		if (size <= 0) {
 			DSM_PRINT(DEBUG_SIGN,
-				  "dsi_bprm_compute_creds Unable to read signature in blocks: %d\n",
+				  "dsi_verify_signature: Unable to read signature in blocks: %d\n",
 				  size);
 			kfree(sig_result);
 			kfree(read_blocks);
@@ -218,6 +217,9 @@ dsi_verify_signature(char *filename, Elf32_Shdr * elf_shdata,
 			return -1;
 		}
 
+		/* Makan: This is in order to avoid building a buffer
+		   inside the kernel. At each read we check to be sure
+		   that the parts of the signature read are set to 0 */ 
 		/* Must zero out signature section to match bsign mechanism */
 		lower = sh_offset;	/* lower bound of memset */
 		upper = sh_offset + DSI_ELF_SIG_SIZE;	/* upper bound */
@@ -236,7 +238,7 @@ dsi_verify_signature(char *filename, Elf32_Shdr * elf_shdata,
 		/* continue verification loop */
 		if (dsi_sign_verify_update(ctx, read_blocks, size) != 0) {
 			DSM_PRINT(DEBUG_SIGN,
-				  "dsi_bprm_compute_creds Error updating crypto verification\n");
+				  "dsi_verify_signature Error updating crypto verification\n");
 			kfree(sig_result);
 			kfree(read_blocks);
 			up (&dsi_digsig_sem);
@@ -248,7 +250,7 @@ dsi_verify_signature(char *filename, Elf32_Shdr * elf_shdata,
 	if ((retval = dsi_sign_verify_final(ctx, sig_result, DSI_ELF_SIG_SIZE,
 					    sig_orig + DSI_BSIGN_INFOS)) < 0) {
 		DSM_PRINT(DEBUG_SIGN,
-			  "dsi_bprm_compute_creds Error calculating final crypto verification\n");
+			  "dsi_verify_signature Error calculating final crypto verification\n");
 		kfree(sig_result);
 		kfree(read_blocks);
 		up (&dsi_digsig_sem);
@@ -261,6 +263,137 @@ dsi_verify_signature(char *filename, Elf32_Shdr * elf_shdata,
 	return retval;
 }
 
+#ifdef DSI_MMAP
+int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
+{
+	struct elfhdr elf_ex;
+	int retval, sh_offset;
+	unsigned int size;
+	Elf32_Shdr *elf_shdata;
+	char *sig_orig;
+	long exec_time = 0;
+	char *buf;
+
+	if (!file)
+		return 0;
+	if (!(prot & (S_IXUSR | S_IXGRP | S_IXOTH)))
+		return 0;
+	if (!file->f_dentry)
+		return 0;
+	if (!file->f_dentry->d_name.name)
+		return 0;
+
+	if (!g_init)
+		return 0;
+
+	buf = kmalloc (BINPRM_BUF_SIZE, DSI_SAFE_ALLOC);
+	if (!buf) {
+		DSM_ERROR ("kmalloc failed in dsi_file_mmap for buf\n");
+		return 0;
+	}
+
+	if (DSIDebugLevel & DEBUG_TIME)	/* measure exec time only on DEBUG mode. */
+		exec_time = jiffies;
+
+	DSM_PRINT(DEBUG_SIGN, "binary is %s\n", file->f_dentry->d_name.name);
+
+	/* Get the exec-header, the original bprm->buf is no longer reliable at this point */
+	kernel_read(file, 0, buf, BINPRM_BUF_SIZE);
+	elf_ex = *((struct elfhdr *) buf);
+
+	if (memcmp(elf_ex.e_ident, ELFMAG, SELFMAG) != 0) {
+		DSM_PRINT(DEBUG_SIGN,
+			  "dsi_file_mmap: Binary is not elf format\n");
+		retval = 0;
+		/* ToDO: Makan, we decide to let go the not elf binaries.
+		   ?? This is not obvious, we cannot sign a non-elf binary, should
+		   we only check elf files and not execute the non-elf
+		   binaries???? */
+		goto out_file;
+	}
+
+	if (elf_ex.e_type != ET_EXEC && elf_ex.e_type != ET_DYN) {
+		DSM_PRINT(DEBUG_SIGN, "dsi_file_mmap: Binary is not executable\n");
+		retval = 0;	/* ToDO: Makan, we decide to let go the not executable binaries. */
+		goto out_file;
+	}
+
+	/* Now read in all of the section header entries */
+	if (!elf_ex.e_shoff) {
+		DSM_ERROR("dsi_file_mmap: No section header!\n");
+		retval = DIGSIG_MODE;
+		goto out_file;
+	}
+
+	if (elf_ex.e_shentsize != sizeof(Elf32_Shdr)) {
+		DSM_ERROR ("dsi_file_mmap: Section header is wrong size!\n");
+		retval = DIGSIG_MODE;
+		goto out_file;
+	}
+
+	if (elf_ex.e_shnum > 65536U / sizeof(Elf32_Shdr)) {
+		DSM_ERROR ("dsi_file_mmap: Too many entries in Section Header!\n");
+		retval = DIGSIG_MODE;
+		goto out_file;
+	}
+
+	size = elf_ex.e_shnum * sizeof(Elf32_Shdr);
+
+	elf_shdata = (Elf32_Shdr *) kmalloc(size, DSI_SAFE_ALLOC);
+	if (!elf_shdata) {
+		DSM_ERROR ("dsi_file_mmap: Cannot allocate memory to read Section Header\n");
+		retval = DIGSIG_MODE;
+		goto out_file;
+	}
+
+	retval = kernel_read (file, elf_ex.e_shoff, (char *) elf_shdata, size);
+
+	if (retval < 0 || retval != size) {
+		DSM_ERROR ("dsi_file_mmap: Unable to read binary %s: %d\n",
+			   file->f_dentry->d_name.name, retval);
+		kfree (elf_shdata);
+		retval = DIGSIG_MODE;
+		goto out_file;
+	}
+
+	/* Find signature section */
+	if ((sig_orig = dsi_find_signature (&elf_ex, elf_shdata, file,
+					    &sh_offset)) == NULL) {
+		retval = DIGSIG_MODE;
+		DSM_PRINT(DEBUG_SIGN,"dsi_file_mmap: Signature not found for the binary: %s !\n", 
+			  file->f_dentry->d_name.name);
+		goto out_file;
+	}
+
+	/* Verify binary's signature */
+	retval = dsi_verify_signature (elf_shdata, sig_orig, file, sh_offset);
+
+	if (!retval) {
+		DSM_PRINT(DEBUG_SIGN,
+			  "dsi_file_mmap: Signature verification successful\n");
+	} else if (retval > 0) {
+		DSM_ERROR("dsi_file_mmap: Signature do not match for %s\n", file->f_dentry->d_name.name);
+		retval = -EPERM;
+	} else {
+		DSM_PRINT(DEBUG_SIGN,
+			  "dsi_file_mmap: Signature verification failed because of errors: %d for %s\n",
+			  retval, file->f_dentry->d_name.name);
+		retval = -EPERM;
+	}
+
+	kfree(sig_orig);
+
+ out_file:
+	if (DSIDebugLevel & DEBUG_TIME) {	/* measure exec time only on DEBUG mode. */
+		exec_time = jiffies - exec_time;
+		total_jiffies += exec_time;
+		DSM_PRINT(DEBUG_TIME, "Time to execute dsi_file_mmap on %s is %li\n", file->f_dentry->d_name.name, exec_time);
+	}
+	kfree (buf);
+	return retval;
+
+}
+#else /* DSI_MMAP */
 /******************************************************************************
 Description :
 We don't have to check if file is regular, exists, or is zero
@@ -283,7 +416,6 @@ Careful!!! endian type is platform dependent, big endian is assumed for i386
 Parameters  : 
 Return value: 
 ******************************************************************************/
-
 int dsi_bprm_check_security(struct linux_binprm *bprm)
 {
 	struct elfhdr elf_ex;
@@ -382,8 +514,7 @@ int dsi_bprm_check_security(struct linux_binprm *bprm)
 	}
 
 	/* Verify binary's signature */
-	retval = dsi_verify_signature(bprm->filename, elf_shdata,
-				      sig_orig, file, sh_offset);
+	retval = dsi_verify_signature (elf_shdata, sig_orig, file, sh_offset);
 
 	if (!retval) {
 		DSM_PRINT(DEBUG_SIGN,
@@ -410,11 +541,15 @@ int dsi_bprm_check_security(struct linux_binprm *bprm)
 	}
 	return retval;
 }
-
+#endif /* DSI_MMAP */
 
 void security_set_operations(struct security_operations *ops)
 {
+#ifdef DSI_MMAP
+	set_dsi_ops (ops, file_mmap);
+#else
 	set_dsi_ops(ops, bprm_check_security);
+#endif
 
 }
 

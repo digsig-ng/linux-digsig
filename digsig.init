@@ -22,11 +22,25 @@ sysfs_test()
 	exit 1
     fi
 }
+public_key_test()
+{
+     echo "Testing if the public key exists."
+     if test -f "$1" 
+     then
+        echo "Pulic key found."
+    else
+        echo "Public key not found!"
+        echo "Usage digsig.init start public_key_file_name"
+        exit 1
+    fi
 
+
+}
 case "$1" in
     start)
 	root_or_die
 	sysfs_test
+	public_key_test $2
 	echo "Loading Digsig module."
 	/sbin/insmod -f ./digsig_verif.ko || exit 1
 	echo "Loading public key."	
@@ -35,9 +49,9 @@ case "$1" in
 	;;
     stop)
 	root_or_die
-	echo "Unloading Digsig"
+	echo "Unloading Digsig."
 	/sbin/rmmod digsig_verif
-	echo "."
+	echo "Done."
 	;;
     compile)
 	make -C /lib/modules/`uname -r`/build SUBDIRS=$PWD modules
