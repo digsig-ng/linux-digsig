@@ -1,33 +1,34 @@
 #!/bin/sh
 
+DIGSIG_DEVICE=/dev/Digsig
+
+root_or_die()
+{
+    if [ "$(id -u)" != "0" ]
+	then
+	    echo "You must be root to load or unload kernel modules"
+	    exit 1
+    fi
+}
 
 case "$1" in
     start)
-# Root or die
-	if [ "$(id -u)" != "0" ]
-	    then
-	    echo "You must be root to load or unload kernel modules"
-	    exit 1
-	fi
+	root_or_die
 	echo "Loading Digsig module."
 	/sbin/insmod -f ./digsig_verif.ko || exit 1
 	echo "Making device for communication with the module."	
 	major=`awk '$2=="Digsig_module" {print $1}' /proc/devices`
-	mknod /dev/Digsig c $major 0
+	mknod $DIGSIG_DEVICE c $major 0
 	echo "Loading public key."	
 	./tools/extract_pkey $2
 	echo "Done."
 	;;
     stop)
-# Root or die
-	if [ "$(id -u)" != "0" ]
-	    then
-	    echo "You must be root to load or unload kernel modules"
-	    exit 1
-	fi
-	echo -n "Unloading Digsig"
-	rmmod digsig_verif
-	rm -f /dev/Digsig
+	root_or_die
+	echo "Unloading Digsig"
+	/sbin/rmmod digsig_verif
+	echo "Removing Digsig device"
+	rm -f $DIGSIG_DEVICE
 	echo "."
 	;;
     compile)
@@ -42,7 +43,7 @@ case "$1" in
 	make tags
 	;;
     *)
-	echo "Usage: $0 {start|stop|compile|clean}"
+	echo "Usage: $0 {start <pubkey>|stop|compile|clean}"
 	exit 1
 esac
 
