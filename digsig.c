@@ -296,7 +296,7 @@ digsig_verify_signature(Elf32_Shdr * elf_shdata,
 	/* A bit of bsign formatting else hashes won't match, works with bsign v0.4.4 */
 	retval = digsig_sign_verify_final(ctx, sig_result, DIGSIG_ELF_SIG_SIZE,
 					    sig_orig + DIGSIG_BSIGN_INFOS);
-	if (retval < 0) {
+	if (retval != 0) {
 		DSM_PRINT(DEBUG_SIGN,
 			  "%s: Error calculating final crypto verification\n", __FUNCTION__);
 		goto out;
