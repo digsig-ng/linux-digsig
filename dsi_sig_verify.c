@@ -246,7 +246,7 @@ Return value: 0 - RSA signature is valid
 static int digsig_rsa_bsign_verify(unsigned char *hash_format, int length,
 			 unsigned char *signed_hash)
 {
-	int rc = 0;
+	int rc = 0, cmp;
 	MPI hash, data;
 	unsigned nread = DIGSIG_ELF_SIG_SIZE;
 	int nframe;
@@ -326,7 +326,8 @@ static int digsig_rsa_bsign_verify(unsigned char *hash_format, int length,
 	}
 
 	/* Do RSA verification */
-	rc = rsa_verify(hash, &data, digsig_public_key);
+	cmp = rsa_verify(hash, &data, digsig_public_key);
+	rc = cmp ? -EPERM : 0;
 
 	mpi_free(hash);
 	mpi_free(data);
