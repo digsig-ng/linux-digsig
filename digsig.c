@@ -564,13 +564,6 @@ static int digsig_file_mmap(struct file * file, unsigned long prot, unsigned lon
 	if (!file->f_dentry->d_name.name)
 		return 0;
 
-	if (strcmp(file->f_dentry->d_name.name, "rmmod") == 0)
-		return 0;
-	if (strcmp(file->f_dentry->d_name.name, "libc.so.6") == 0)
-		return 0;
-	if (strcmp(file->f_dentry->d_name.name, "ld.so.1") == 0)
-		return 0;
-
 	if (is_unprotected_file(file))
 		return DIGSIG_MODE;
 
