@@ -1,0 +1,20 @@
+all: obj lib 
+
+CFLAGS= -g -DHAVE_CONFIG_H
+
+INCLUDS= -I. -I../include
+
+# mpi-add.o: mpi-add.c 
+# 	gcc $(INCLUDS) $(CFLAGS) -c mpi-add.c 
+
+%.o: %.c 
+	gcc $(INCLUDS) $(CFLAGS) -c $< -o $@
+
+OBJ= mpi-add.o mpi-bit.o mpi-cmp.o mpi-div.o mpi-gcd.o mpih-cmp.o mpih-div.o mpih-mul.o mpi-inline.o mpi-inv.o mpi-mpow.o mpi-mul.o mpi-pow.o mpi-scan.o mpiutil.o mpicoder.o 
+
+obj: $(OBJ) 
+
+lib: $(OBJ)
+	ar cru libMPI.a $(OBJ) generic/*.o
+clean: 
+	rm *.o *.a 
