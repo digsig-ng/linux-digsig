@@ -252,7 +252,7 @@ file\_mmap(), and finally bprm\_free\_security().
 
 \begin{figure}[h]
 \begin{center}
-\epsfxsize=14cm 
+\epsfxsize=12cm 
 \epsfbox{System-call}
 \caption{{\it Control flow in binary execution. }}
 \label{fig1}
@@ -279,7 +279,7 @@ buffer it signs.
 
 \begin{figure}[h]
 \begin{center}
-\epsfxsize=10cm 
+\epsfxsize=12cm 
 \epsfbox{ELF-Format}
 \caption{{\it BSign's signature section as added in an ELF binary. }}
 \label{fig2}
@@ -439,7 +439,7 @@ code of math libraries to the kernel, instead of using pure C code.
 CPU: CPU with timer interrupt, speed 2398.91 MHz (estimated)
 Profiling through timer interrupt
 vma      samples  %           image name       app name     symbol name
-00001150 401      42.5239     digsig_verifko  digsig_verif mpihelp_submul_1
+00001150 401      42.5239     digsig_verif.ko  digsig_verif mpihelp_submul_1
 00001090 198      20.9968     digsig_verif.ko  digsig_verif mpihelp_addmul_1
 00000e90 109      11.5589     digsig_verif.ko  digsig_verif dsi_sha1_update
 00002fa0 77        8.1654     digsig_verif.ko  digsig_verif mpihelp_divrem
