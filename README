@@ -1,4 +1,4 @@
-Release of digsig.0.2
+Release of digsig.1.0
 ====================== 
 
 This kernel module checks signature of a binary before running it.
@@ -29,7 +29,7 @@ OpenSSL is 4 times faster than GPG regarding RSA verification. As a
 future direction, we plan to clarify this licensing issue and use (if
 possible) OpenSSL instead of GPG.
 
-INSTALL
+COMPILING
 =========== 
 
 To compile Digsig from the directory you installed Digsig do: 
@@ -45,14 +45,13 @@ debug mode.  In debug mode, DigSig lets unsigned binaries run. This
 state is ideal to test DigSig, and also list the binaries you need to
 sign to get a fully operational system.
 
--DDSI_EXEC_ONLY: DigSig normally checks the signatures for shared
-binaries. If you wish for performance reason or whatever other reason
-to only verify the signatures for executable binaries set this
-variable.
-
--DDIGSIG_LOG: This allows to generate logs at verfication time. Be
-careful about the amount of log to be generated at run
-time. Definitely, useful for debugging purposes.
+ -DDSI_EXEC_ONLY: DigSig normally verifies the signatures for
+ executable binaries and shared librairies. If you wish for
+ performance reason or whatever other reason to only verify the
+ signatures for executable binaries set this variable.
+ 
+ -DDIGSIG_LOG: This activates the logging. Be careful about the amount
+ of log to be generated at run time. 
 
 Requirements:
 ==============
