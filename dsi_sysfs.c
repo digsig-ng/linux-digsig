@@ -57,6 +57,14 @@ struct digsig_attribute  {
 	ssize_t (*store)(struct kobject *, struct attribute *attr, const char *, size_t);
 };
 
+#ifndef __ATTR
+#define __ATTR(_name,_mode,_show,_store) { \
+        .attr = {.name = __stringify(_name), .mode = _mode, .owner = THIS_MODULE },     \
+        .show   = _show,                                        \
+        .store  = _store,                                       \
+}
+#endif 
+
 #define DIGSIG_ATTR(_name, _mode, _show, _store)	\
 struct digsig_attribute digsig_attr_##_name = __ATTR(_name,_mode,_show,_store)
 
