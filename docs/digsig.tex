@@ -1,0 +1,623 @@
+\documentclass{article}
+\usepackage{graphics,epsfig,url,times}
+\begin{document}
+
+%don't want date printed
+%\date{}
+
+\pagestyle{empty}
+
+
+\title{\Large \bf The DigSig project}
+
+\author{
+A. Apvrille - {\normalsize Axelle.Apvrille@trusted-logic.fr}\\
+D. Gordon - {\normalsize David.Gordon@ericsson.ca}\\
+S. Hallyn - {\normalsize serue@us.ibm.com}\\
+M. Pourzandi - {\normalsize Makan.Pourzandi@ericsson.ca}\\
+V. Roy - {\normalsize Gaspoucho@yahoo.com}\\
+} % end author
+
+\maketitle
+
+%\thispagestyle{empty}
+
+This working documentation presents the DigSig project, 
+a Linux kernel module capable of verifying
+digital signatures of ELF binaries before running them. This kernel
+module is available under the GPL license at 
+http://sourceforge.net/projects/disec/, and has been successfully
+tested for kernel 2.5.66 and above.
+
+\section{Why Check the Signature of Your Binaries Before Running Them ?}
+
+The problem with blindly running executables is that you are never
+sure they actually do what you think they are supposed to do (and
+nothing more...): if viruses spread so much on Microsoft Windows
+systems, it is mainly because users are frantic to execute whatever
+they receive, especially if the title is appealing... The LoveLetter
+virus, with over 2.5 million machines infected, is a famous
+illustration of this.  Yet, Linux is unfortunately not immune to
+malicious code either \cite{linux-world}. By executing unknown and untrusted code,
+users are exposed to a wide range of Unix worms, viruses, trojans,
+backdoors etc.  To prevent this, a possible solution is to digitally
+sign binaries you trust, and have the system check their digital
+signature before running them: if the signature cannot be verified, the
+binary is declared corrupt and operating system will not let it run.
+
+\section{Related Work} 
+
+There has already been several initiatives in this domain,
+such as Tripwire, BSign, Cryptomark, and IBM's Signed Executables \cite{Tripwire, Bsign, Cryptomark, IBM-sign}
+but we believe the DigSig project is the first to be both 
+easily accessible to all (available on Sourceforge, 
+under the GPL license) and to operate at kernel level (see Tab. 1).
+
+
+\begin{table}[ht]
+\begin{center}
+\begin{tabular}{|p{2cm}|l|l|l|l|}
+\hline
+ & Real-time signature verification & File type & Level & Availability \\ 
+\hline
+Tripwire    & No           & All       & User      & Commercial  \& GPL \\ 
+\hline
+Cryptomark  & Yes          & Binaries  & Kernel    & CryptoMark's web: "Not  \\& & & &  ready for public release" \\
+\hline
+Signed  Executables    & Yes          & Binaries \& scripts & Kernel    & Not GPL   \\     
+\hline
+DigSig      & Yes          & Binaries  & Kernel    & GPL \\ 
+\hline
+\end{tabular}
+\caption{Comparison between file signing tools.}
+\label{tab:userspace}
+\end{center}
+\end{table}
+
+%% \begin{verbatim} 
+%% +-------------+--------------+-----------+-----------+--------------+
+%% +             + Real-time    + File type + Level     + Availability +
+%% +             + signature    +           +           +              +
+%% +             + verification +           +           +              +
+%% +-------------+--------------+-----------+-----------+--------------+
+%% + Tripwire    + No           + All       + User      + Commercial & +
+%% +             +              +           +           + GPL          +
+%% +-------------+--------------+-----------+-----------+--------------+
+%% + BSign       + No           + Binaries  + User      + GPL          +
+%% +-------------+--------------+-----------+-----------+--------------+
+%% + Cryptomark  + Yes          + Binaries  + Kernel    + From Crypto  +
+%% +             +              +           +           + Mark's web:  +
+%% +             +              +           +           + "Not ready   +
+%% +             +              +           +           + for public   +
+%% +             +              +           +           + release"     +
+%% +-------------+--------------+-----------+-----------+--------------+
+%% + Signed      + Yes          + Binaries  + Kernel    + Not GPL      + 
+%% + Executables +              + + scripts +           +              +
+%% +-------------+--------------+-----------+-----------+--------------+
+%% + DigSig      + Yes          + Binaries  + Kernel    + GPL          +
+%% +-------------+--------------+-----------+-----------+--------------+
+%% Tab 1. Comparison between file signing tools
+
+%% \end{verbatim} 
+
+\section{The DigSig Solution}
+
+In order to avoid re-inventing the wheel, we based our solution on the
+existing open source project BSign: a Debian userspace binary
+signing package. BSign signs the binaries and embeds the signature in
+the binary itself. Then, at kernel level, DigSig verifies these 
+signatures at execution time and denies execution if signature is invalid. 
+
+Typically, in our approach, binaries are not signed by vendors, but we
+rather hand over control of the system to the local administrator.
+He/she is responsible to sign all binaries he/she trusts with his/her
+private key. Then, those binaries are verified with the corresponding
+public key. This means you can still use your favorite (signed)
+binaries: no change in habits. Basically, DigSig only guarantees two
+things: (1) if you signed a binary, nobody else than you can modify
+that binary without being detected, and (2) nobody can run a binary
+which is not signed or badly signed.  Of course, you should be careful
+not to sign untrusted code: if malicious code is signed, all security
+benefits are lost.
+
+\section{How do I use DigSig ?}
+DigSig is fairly simple to use. First, you need to sign all binaries
+you trust with BSign (version 0.4.5 or more). Then you need to load
+DigSig with the public key which corresponds to the private key
+used to sign the binaries.
+
+In the following we show step by step how to sign the executable "ps":
+
+\begin{verbatim} 
+$ cp `which ps` ps-test
+$ bsign -s ps-test // Sign the binary
+$ bsign -V ps-test // Verify the validity of the signature 
+\end{verbatim} 
+
+Then, you need to install the DigSig kernel module. To do so, a recent
+kernel version is required (25.66 or more), compiled with security
+options enabled (CONFIG\_SECURITY$=$y).  To compile DigSig, assuming your
+kernel source directory is /usr/src/linux-2.5.66, you do:
+
+\begin{verbatim} 
+$ cd digsig
+$ make -C /usr/src/linux-2.5.66 SUBDIRS=$PWD modules
+$ cd digsig/tools && make
+\end{verbatim} 
+
+This builds the DigSig kernel module (digsig\_verifko), and you are
+probably already half-way through the command to load it, but wait !
+If you are not cautious about the following point, you might secure
+your machine so hard you'll basically freeze it. As a matter of fact,
+once DigSig is loaded, verification of binary signatures is activated.
+At that time, binaries will be able to run only if their signature is
+successfully verified. In all other cases (invalid signature,
+corrupted file, no signature...), execution of the binary will be
+denied. Consequently, if you forget to sign an essential binary such
+as /sbin/reboot, or /sbin/rmmod, you'll be most embarrassed to reboot
+the system if you have to...  Therefore, for testing purposes, we
+recommend you initially run DigSig in debug mode. To do this, compile
+DigSig with the DSI\_DIGSIG\_DEBUG and DSI\_DEBUG flags set in the
+Makefile:
+
+\begin{verbatim} 
+EXTRA_CFLAGS += -DDSI_DEBUG -DDSI_DIGSIG_DEBUG -I $(obj)
+\end{verbatim} 
+
+In debug mode, DigSig lets unsigned binaries run. This state is ideal
+to test DigSig, and also list the binaries you need to sign to get a
+fully operational system.
+
+Once this precaution has been taken, it is now time to load the DigSig
+module, with your public key as argument. BSign uses GnuPG keys to
+sign binaries, so retrieve your public key as follows:
+
+\begin{verbatim} 
+$ gpg --export >> my_public_key.pub 
+\end{verbatim} 
+
+Then, log as root, and use the digsig.init script to load the module.
+
+\begin{verbatim} 
+# ./digsig.init start my_public_key.pub
+Testing if sysfs is mounted in /sys.
+sysfs found
+Loading Digsig module.
+Loading public key.
+Done.
+\end{verbatim} 
+
+This is it: signature verification are activated. You can check the 
+signed ps executable (ps-test) works:
+
+\begin{verbatim} 
+$./ps-test
+$ su
+Password:
+# tail -f /var/log/messages
+colby kernel: DSI-LSM MODULE - binary is ./ps-test
+colby kernel: DSI-LSM MODULE - dsi_bprm_compute_creds: Found signature 
+                                                                 section
+colby kernel: DSI-LSM MODULE - dsi_bprm_compute_creds: Signature verification 
+                                                                 successful
+\end{verbatim} 
+
+But, corrupted executables won't run:
+\begin{verbatim} 
+$ ./ps-corrupt
+bash: ./ps-corrupt: Operation not permitted 
+colby kernel: DSI-LSM MODULE - binary is ./ps-corrupt
+colby kernel: DSI-LSM MODULE Error - dsi_bprm_compute_creds: Signatures 
+                                         do not match for ./ps-corrupt
+\end{verbatim} 
+
+If the permissive debug mode is set, signature verification is skipped
+for unsigned binaries.  Otherwise, the control is strictly enforced in
+the normal behavior:
+
+\begin{verbatim} 
+$ ./ps
+bash: ./ps: cannot execute binary file 
+# su 
+Password: 
+# tail -f /var/log/messages
+colby kernel: DSI-LSM MODULE - binary is ./ps
+colby kernel: DSI-LSM MODULE - dsi_bprm_compute_creds: Signatures 
+                                                        do not match
+\end{verbatim} 
+
+\section{DigSig, behind the scene}
+
+The core of DigSig lies in the LSM hooks placed in the kernel's
+routines for executing a binary. The starting point of any binary
+execution is a system call to sys\_exec() which triggers
+do\_execve(). This is the transition between user space and kernel
+space.
+
+The first LSM hook to be called is bprm\_alloc\_security,
+where a security structure is optionally attached to the
+linux\_bprm structure which represents the task. DigSig
+does not use this hook as it doesn't need any specific
+security structure.
+Then, the kernel tries to find a binary handler 
+(search\_binary\_handler) to load the file. This is
+when the LSM hook bprm\_check\_security is called, and precisely
+when DigSig performs signature verification of the binary
+If successful, load\_elf\_binary() gets called,
+which eventually calls do\_mmap(), then the LSM hook
+file\_mmap(), and finally bprm\_free\_security().
+
+%<< include System-call.jpg >>
+%Fig.1: Control flow in binary execution
+
+\begin{figure}[h]
+\begin{center}
+\epsfxsize=14cm 
+\epsfbox{System-call}
+\caption{{\it Control flow in binary execution. }}
+\label{fig1}
+\end{center}
+\end{figure}
+
+So, this is how DigSig enforces binary signature verification at
+kernel level. Now, let's shortly explain the signing mechanism of
+DigSig's userland counterpart: BSign. When signing an ELF binary,
+BSign stores the signature in a new section in the binary.  To do so,
+it modifies the ELF's section header table to account for this new
+section, with the name 'signature' and a user defined type 0x80736967
+(which comes from the ASCII characters 's', 'i' and 'g'). You can
+check your binary's section header table with the command readelf -S
+binary.  Then, it performs a SHA1 hash on the entire file, after
+having zeroed the additional signature section.  Next, it prefixes
+this hash with "\#1; bsign v\%s" where \%s is the version number of
+BSign, and stores the result at the begining of the binary's signature
+section. Finally, BSign calls GnuPG to sign the signature section
+(containing the hash), and stores the signature at the current position
+of the signature section. A short compatibility note: GnuPG adds a
+32-byte timestamp and a signature class identifier in the
+buffer it signs.
+
+\begin{figure}[h]
+\begin{center}
+\epsfxsize=10cm 
+\epsfbox{ELF-Format}
+\caption{{\it BSign's signature section as added in an ELF binary. }}
+\label{fig2}
+\end{center}
+\end{figure}
+
+%%<< include ELF-format.jpg >> 
+%%Fig.2: BSign's signature section as added in an ELF binary 
+
+On a cryptographic point of view, DigSig needs to verify 
+BSign's signatures, i.e RSA signatures. More precisely, this 
+consists in, on one side, hashing the binary
+with a one-way function (SHA-1) and padding the result (EMSA PKCS1 v1.5), and,
+on the other side, "decrypting" the signature with the public key
+and verifying this corresponds to the padded text.
+
+PKCS\#1 padding is pretty simple to implement, so we had no problems
+coding it. Concerning SHA-1 hashing, we used Linux's kernel CryptoAPI:
+
+\begin{itemize} 
+\item we allocate a crypto\_tfm structure (crypto\_alloc\_tfm), and use
+  it to initialize the hashing process (crypto\_digest\_init)
+\item then, we read the binary block by block, and feed it to the hashing
+  routine (crypto\_digest\_update)
+\item finally, we retrieve the hash (crypto\_digest\_final).
+\end{itemize} 
+The trickiest part is most certainly the RSA verification because
+the CryptoAPI does not support asymetric algorithms (such as RSA) yet,
+so we had to implement it... The theory behind RSA is relatively
+simple: it consists in a modular exponentation ($m^e mod n$) using
+very large primes, however, in practice, everybody will agree that 
+implementing an efficient big number library is tough work. 
+So, instead of writing ours, we decided it would be safer to use
+an existing one and adapt it to kernel restrictions.
+We decided to port GnuPG's math library (which is
+actually derived from GMP, GNU's math library) \cite{GnuPG}:
+\begin{itemize} 
+\item only the RSA signature verification routines have been kept. 
+  For instance, functions to generate large primes have been erased.
+\item allocations on the stack have been limited to the strict minimum.
+\end{itemize} 
+
+\section{How much does it slow the system down ?} 
+
+We have performed two different kinds of benchmarks for DigSig: 
+a benchmark of the real impact of DigSig for users (how much they
+feel the system is slowed down), and a more precise benchmark
+evaluating the exact overhead induced by our kernel module.
+
+The first set of benchmarks have been performed by comparing
+how long it takes to run an executable with or without DigSig.
+To do so, we used the command 'time' over fast to longer executions. 
+The following benchmark has been run 20 times:
+
+\begin{verbatim} 
+% time /bin/ls -Al		  # times /bin/ls
+% time ./digsig.init compile      # times compilation with gcc
+% time tar jxvfp linux-2.6.0-test8.tar.bz2 # times tar
+\end{verbatim} 
+
+On a Pentium 4, 2.2 Ghz, with 512 MB of RAM, with DigSig using GnuPG's
+math library, we have obtained results displayed at Table 2. They
+clearly show that the impact of DigSig is quite important for short
+executions (such as ls) but soon becomes completely negligeable for
+longer executions such as compiling a project with gcc, or untarring
+sources with tar.
+
+
+\begin{table}[ht]
+\begin{center}
+\begin{tabular}{|l|l|l|l|}
+\hline
+ & ls & gcc   & tar    \\ 
+\hline
+Without DigSig & 0.006 & 15.727 & 36.7345 \\  
+\hline
+With DigSig    & 0.008 & 16.550 & 36.7333 \\
+\hline
+\end{tabular}
+\caption{Average execution time in seconds with or without DigSig.}
+\label{tab:userspace}
+\end{center}
+\end{table}
+
+
+%% \begin{verbatim} 
+%% +----------------+-------+--------+--------+
+%% |                | ls    | gcc    | tar    |
+%% +----------------+-------+--------+--------+
+%% | Without DigSig | 0.006 | 15.727 | 36.7345| 
+%% | With DigSig    | 0.008 | 16.550 | 36.7333|
+%% +----------------+-------+--------+--------+
+%% Tab 2. Average execution time in seconds with or without DigSig.
+%% \end{verbatim} 
+
+Second, we have measured the exact overhead introduced by our kernel
+module. To do so, we have basically compared jiffies at the beginning
+and at the end of bprm\_check\_security. In brief, jiffies represent
+the number of clock ticks since the system has booted, so they
+are a precise way to measure time in the Linux kernel. In our case,
+jiffies are in milliseconds. We have run each binary 30 times
+(see Tab 3) for DigSig compiled with GnuPG.
+
+\begin{table}[ht]
+\begin{center}
+\begin{tabular}{|l|l|l|}
+\hline
+Binaries  & Size  &  GnuPG   \\
+\hline 
+ls &   68230 &  1.61765 \\ 
+\hline 
+ps &   70337 &  1.67742 \\
+\hline 
+busybox & 248801 &  4.66666 \\
+\hline 
+cvs &  672532 & 11.53571 \\
+\hline 
+vim & 1894305 & 31.25000 \\
+\hline 
+emacs & 4093614 & 67.41176 \\
+\hline 
+\end{tabular}
+\caption{Average DigSig overhead, in milliseconds, for various 
+binaries.}
+\label{tab:userspace}
+\end{center}
+\end{table}
+
+
+%% \begin{verbatim} 
+%% +-----------+---------+----------+
+%% | Binaries  |   Size  |  GnuPG   |
+%% +-----------+---------+----------+
+%% |        ls |   68230 |  1.61765 |
+%% |        ps |   70337 |  1.67742 |
+%% |   busybox |  248801 |  4.66666 |
+%% |       cvs |  672532 | 11.53571 |
+%% |       vim | 1894305 | 31.25000 |
+%% |     emacs | 4093614 | 67.41176 |
+%% +-----------+---------+----------+
+%% Tab 3. Average DigSig overhead, in milliseconds, for various 
+%% binaries.
+%% \end{verbatim} 
+
+The results show that, naturally, the digital signature verification
+overhead increases with executable's size (which is not a surprise
+because it takes longer to hash all data).
+
+Finally, to assist us in optimizing our code, we have run Oprofile
+\cite{OProfile}, a system profiler for Linux, over DigSig (see Figure 3). Results
+clearly indicate that the modular exponentiation routines are the most
+expensive, so this is where we should concentrate our optimization
+efforts for future releases. More particularly, we plan to port ASM
+code of math libraries to the kernel, instead of using pure C code.
+
+\begin{verbatim} 
+CPU: CPU with timer interrupt, speed 2398.91 MHz (estimated)
+Profiling through timer interrupt
+vma      samples  %           image name       app name     symbol name
+00001150 401      42.5239     digsig_verifko  digsig_verif mpihelp_submul_1
+00001090 198      20.9968     digsig_verif.ko  digsig_verif mpihelp_addmul_1
+00000e90 109      11.5589     digsig_verif.ko  digsig_verif dsi_sha1_update
+00002fa0 77        8.1654     digsig_verif.ko  digsig_verif mpihelp_divrem
+00000fd0 32        3.3934     digsig_verif.ko  digsig_verif mpihelp_mul_1
+00001300 27        2.8632     digsig_verif.ko  digsig_verif mpihelp_add_n
+00001290 15        1.5907     digsig_verif.ko  digsig_verif mpihelp_sub_n
+
+                    Fig 3. OProfile report for DigSig. 
+\end{verbatim} 
+
+\section{Caching}
+
+Digsig impacts performance only at the beginning of file execution.  For
+long-lived applications which are executed once, such as mozilla, the
+amortized cost is likely acceptable.  However, the cost of repeatedly
+checking signatures on the same executables (such as {\tt ls}) and
+libraries (such as {\tt libc}) can become significant depending upon
+the workload.
+
+To combat this, digsig keeps a cache of validated signature checks
+When a file's signature has been validated, its inode is added into
+a hash table.  The next time the file is loaded, its presence in
+this hash table will serve as signature validation without requiring
+recomputation of the signature.
+
+Caching signature validations can be risky.  We must ensure that an
+attacker cannot use this feature to cause an altered version of a file
+to be loaded without the (now invalid) signature being checked.  In
+the simplest, case, a new file is copied in place of the validated file.
+Since Digsig caches decisions based on the inode, and the new file will
+have a different
+inode than the old file, the signature will be computed and checked for the
+new file.  If, instead, a process attempts to write to an existing file
+whose signature validation has been cached, then the signature
+validation will be cleared.  The next time a process executes this file,
+the signature will be recomputed.  Finally, if a process is still
+executing a file while another process attempts to write to it, the
+Linux kernel will deny the request for write access.
+
+There is still a risk, however, of the file being overwritten at a lower
+layer than the VFS.  In particular, this could happen with files mounted
+over NFS.  In this case, we would depend on the NFS server to deny write
+requests from untrustworthy clients.
+
+Caching will not affect the speed of computation for a particular
+signature.  Its effect will be most dramatic while doing many quick
+repeated executions.  An example of such a workload is compilation of
+large packages, which repeat the same sequence of actions on many different
+files.  To measure a best case performance improvement of
+caching, we timed compilation of Digsig itself in three ways.  Using a kernel
+without the Digsig module loaded, with digsig loaded but caching
+disabled, and with digsig using caching.
+
+Figures~\ref{fig:tartimings}, \ref{fig:lstimings}, and \ref{fig:comptimings} show
+the amount of time
+each of these three systems required to untar the kernel source, perform a
+directory listing on the top level of the kernel source, and to compile the
+actual kernel.  Care was taken to compile all kernels with the same configuration.
+Each test was performed three times.
+
+\begin{figure}
+\begin{tabular}{|l|r|r|r|}
+\hline
+	Kernel without Digsig & & & \\
+	real  &  0m59.937s &0m59.175s &0m58.493s \\
+	user  &  0m42.058s &0m42154s &0m42.225s \\
+	sys   &  0m4.005s  &0m3.939s  &0m3.895s \\
+\hline
+	Digsig without caching & & & \\
+	real  &  1m0.405s  & 0m59.361s & 0m59.329s \\
+	user  &  0m42.269s & 0m42.226s & 0m42.190s \\
+	sys   &  0m3.981s  & 0m3.927s  & 0m4.005s \\
+\hline
+	Digsig with caching & & & \\
+	real  &  0m59.660s & 0m59.827s & 0m59.724s \\
+	user  &  0m42.178s & 0m42195s & 0m42.120s \\
+	sys   &  0m4.008s  & 0m3.921s  & 0m3.940s \\
+\hline
+\end{tabular}
+\caption{Time required for ``tar jxvfp linux-2.6.0-test8.tar.bz2''}\label{fig:tartimings}
+\end{figure}
+
+\begin{figure}
+\begin{tabular}{|l|r|r|r|}
+\hline
+	Kernel without Digsig & & & \\
+	real  &  0m0.065s &0m0.007s &0m0.006s \\
+	user  &  0m0.001s &0m0.002s &0m0.002s \\
+	sys   &  0m0.005s &0m0.003s &0m0.003s \\
+\hline
+	Digsig without caching & & & \\
+	real  &  0m0.049s &0m0.053s &0m0.048s \\
+	user  &  0m0.003s &0m0.001s &0m0.003s \\
+	sys   &  0m0.044s &0m0.042s &0m0.043s \\
+\hline
+	Digsig with caching & & & \\
+	real  &  0m0.025s& 0m0.006s &0m0.006s \\
+	user  &  0m0.001s& 0m0.000s &0m0.003s \\
+	sys   &  0m0.005s& 0m0.003s &0m0.004s \\
+\hline
+\end{tabular}
+\caption{Time required for ``/bin/ls -Al''}\label{fig:lstimings}
+\end{figure}
+
+\begin{figure}
+\begin{tabular}{|l|r|r|r|}
+\hline
+	Kernel without Digsig & & & \\
+	real   & 0m22.836s& 0m15.716s &0m15.700s \\
+	user   & 0m14.291s& 0m14.207s &0m14.242s \\
+	sys    & 0m1.449s &0m1.461s &0m1.427s \\
+\hline
+	Digsig without caching & & & \\
+	real   & 0m42.597s& 0m32.629s &0m32.412s \\
+	user   & 0m14.577s& 0m14.513s &0m14.501s \\
+	sys    & 0m16.073s& 0m16.112s &0m16.158s \\
+\hline
+	Digsig with caching & & & \\
+	real   & 0m22.996s& 0m15.636s &0m15.612s \\
+	user   & 0m14.167s& 0m14.179s &0m14.108s \\
+	sys    & 0m1.543s &0m1.408s   & 0m1.477s \\
+\hline
+\end{tabular}
+\caption{Time required for ``/bin/ls -Al''}\label{fig:comptimings}
+\end{figure}
+
+Since the signature validation occurs during {\tt execve}, we expect its
+time to show up in system, or {\tt sys} time.
+The least impact was seen in the {\tt tar} operation.  This is because
+we performed many file creations, which also appear under system time.
+In contrast, {\tt tar} was a single execution, requiring only one signature
+validation.  Therefore the file operations effectively masked the signature
+validation check.  The
+impact of the signature check is more dramatic in the other two tests,
+where Digsig without caching is eight to fourteen times slower than
+Digsig with caching, or a kernel without Digsig.  The latter two
+performed effectively the same, with Digsig with caching sometimes
+outperforming a Digsig-free kernel.
+
+Finally, compilation of a full kernel required 592 seconds without
+Digsig, 588 seconds with caching, and 1029 with digsig but without caching.
+Caching of signature validations manages very effectively
+eliminate the performance impact of Digsig under what would ordinarily
+be its worst workloads.
+
+\section{Digital Signature of Shared Libraries}
+
+TO WRITE.
+
+\subsubsection*{End remark}
+
+{\small This document has been {\it partly} published in Linux World, vol. 2., no.1, January 2004.}
+
+\begin{thebibliography}{99}
+
+\bibitem{linux-world} 
+  {\em Wraight C., Securing your linux environment, Linux World, Vol 1, 
+    Issue 2, pages 48-51, November/December 2003.}.
+
+\bibitem{Tripwire} 
+  {\em Tripwire, http://www.tripwire.com}.
+
+\bibitem{Bsign} 
+  {\em Bsign, http://packages.qa.debian.org/b/bsign.html}. 
+
+\bibitem{Cryptomark} 
+  {\em Cryptomark, http://www.immunix.org/cryptomark.html}.
+
+\bibitem{IBM-sign}
+  {\em Van Doorn, L., Ballintijn, G., Arbaugh, W.A., Signed Executables for Linux, January 2003.}.
+
+\bibitem{GnuPG}
+  {\em GnuPG, http://www.gnupg.org}. 
+
+\bibitem{OProfile}
+  {\em OProfile, http://oprofile.sourceforge.net}. 
+
+
+\end{thebibliography}
+
+\end{document}
