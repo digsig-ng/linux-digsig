@@ -302,7 +302,7 @@ digsig_verify_signature(Elf32_Shdr * elf_shdata,
 		goto out;
 	}
 
-	retval = 0;
+	// retval = 0;
 
 out:
 	kfree(sig_result);
