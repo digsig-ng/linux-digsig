@@ -33,19 +33,13 @@
  * n bytes: MPI (ie. 0x29)
  */
 
-
-unsigned char *raw_public_key_n = NULL;
-unsigned char *raw_public_key_e = NULL;
-int dsi_mpi_size_n = 0;
-int dsi_mpi_size_e = 0;
-
 extern int DSIDebugLevel;
 
 #define TVMEMSIZE	4096
 
 int gDigestLength[] = { /* SHA-1 */ 0x14 };
 static struct crypto_tfm *SHA1_TFM = NULL;
-static MPI dsi_public_key[2];
+MPI dsi_public_key[] = {MPI_NULL, MPI_NULL};
 
 
 /******************************************************************************
@@ -226,7 +220,7 @@ Parameters  :
 Return value:
 ******************************************************************************/
 
-int dsi_init_pkey(const char read_par)
+int dsi_init_pkey(const char read_par, unsigned char *raw_public_key, int mpi_size)
 {
 	int nread;
 
@@ -234,17 +228,15 @@ int dsi_init_pkey(const char read_par)
 
 	case 'n':
 		DSM_PRINT(DEBUG_SIGN, "Reading raw_public_key_n!\n");
-		nread = dsi_mpi_size_n;
+		nread = mpi_size;
 		dsi_public_key[0] =
-			mpi_read_from_buffer(raw_public_key_n, &nread,
-					     0);
+			mpi_read_from_buffer(raw_public_key, &nread, 0);
 		break;
 	case 'e':
 		DSM_PRINT(DEBUG_SIGN, "Reading raw_public_key_e!\n");
-		nread = dsi_mpi_size_e;
+		nread = mpi_size;
 		dsi_public_key[1] =
-			mpi_read_from_buffer(raw_public_key_e, &nread,
-					     0);
+			mpi_read_from_buffer(raw_public_key, &nread, 0);
 		break;
 	}
 

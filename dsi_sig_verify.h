@@ -86,7 +86,7 @@ int dsi_sign_verify_final(SIGCTX * ctx, char *sig,
 			  int siglen /* PublicKey */ ,
 			  unsigned char *signed_hash);
 void dsi_sign_verify_free(void);
-int dsi_init_pkey(const char read_par);
+int dsi_init_pkey(const char read_par, unsigned char *raw_public_key, int mpi_size);
 
 
 

@@ -53,7 +53,7 @@ void dsi_free_revoked_sigs(void)
 		if (tmp != &dsi_revoked_sigs) {
 			list_del(tmp);
 			rsig = list_entry(tmp, struct revoked_sig, next);
-			m_free(rsig->sig);
+			mpi_free(rsig->sig);
 			kfree(rsig);
 		} else {
 			DSM_ERROR("major list screwyness\n");

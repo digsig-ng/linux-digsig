@@ -48,10 +48,7 @@
 
 extern int g_init; /* digsig.c */
 extern long int total_jiffies; /* digsig.c */
-extern unsigned char *raw_public_key_n; /* dsi_sig_verify */
-extern unsigned char *raw_public_key_e; /* dsi_sig_verify */
-extern int dsi_mpi_size_n; /* dsi_sig_verify */
-extern int dsi_mpi_size_e; /* dsi_sig_verify */
+extern MPI dsi_public_key[2]; /* dsi_sig_verify.c */
 
 extern struct list_head dsi_revoked_sigs; /* dsi_cache.c */
 
@@ -201,6 +198,9 @@ Return value:
 static ssize_t
 digsig_key_store (struct kobject *obj, struct attribute *attr, const char *buff, size_t count)
 {
+	unsigned char *raw_public_key;
+	int mpi_size;
+
 	switch (buff[0]) {
 	case 'i':
 		total_jiffies = 0;
@@ -220,38 +220,37 @@ digsig_key_store (struct kobject *obj, struct attribute *attr, const char *buff,
 	switch (buff[0]) {
 
 	case 'n':
-		raw_public_key_n =
+		raw_public_key =
 			(unsigned char *) kmalloc(count - DSI_KEY_OFFSET, DSI_SAFE_ALLOC);
-		if (!raw_public_key_n) {
+		if (!raw_public_key) {
 			DSM_ERROR("kmalloc fail for n in dsi_write\n");
 			return -ENOMEM;
 		}
-		memcpy(raw_public_key_n, &buff[DSI_KEY_OFFSET], count - DSI_KEY_OFFSET);
-		dsi_mpi_size_n = count - DSI_KEY_OFFSET;
-		DSM_PRINT(DEBUG_DEV, "pkey->n size is %i\n",
-			  dsi_mpi_size_n);
+		memcpy(raw_public_key, &buff[DSI_KEY_OFFSET], count - DSI_KEY_OFFSET);
+		mpi_size = count - DSI_KEY_OFFSET;
+		DSM_PRINT(DEBUG_DEV, "pkey->n size is %i\n", mpi_size);
 		break;
 	case 'e':
-		raw_public_key_e =
+		raw_public_key =
 			(unsigned char *) kmalloc(count - DSI_KEY_OFFSET, DSI_SAFE_ALLOC);
-		if (!raw_public_key_e) {
+		if (!raw_public_key) {
 			DSM_ERROR("kmalloc fail for e in dsi_write\n");
 			return -ENOMEM;
 		}
-		memcpy(raw_public_key_e, &buff[DSI_KEY_OFFSET], count - DSI_KEY_OFFSET);
-		dsi_mpi_size_e = count - DSI_KEY_OFFSET;
-		DSM_PRINT(DEBUG_DEV, "pkey->e size is %i\n",
-			  dsi_mpi_size_e);
+		memcpy(raw_public_key, &buff[DSI_KEY_OFFSET], count - DSI_KEY_OFFSET);
+		mpi_size = count - DSI_KEY_OFFSET;
+		DSM_PRINT(DEBUG_DEV, "pkey->e size is %i\n", mpi_size);
 		break;
 	default:
 		return -EINVAL;
 	}
 
-	dsi_init_pkey(buff[0]);
+	dsi_init_pkey(buff[0], raw_public_key, mpi_size);
 
-	if (raw_public_key_n && raw_public_key_e) {
+	if (dsi_public_key[0] && dsi_public_key[1]) {
 		g_init = 1;
 	}
+	kfree(raw_public_key);
 
 	return count;
 }

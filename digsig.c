@@ -66,7 +66,7 @@
 #define get_file_security(file) ((unsigned long)(file->f_security))
 #define set_file_security(file,val) (file->f_security = (void *)val)
 
-extern MPI *dsi_public_key[2]; /* dsi_sig_verify.c */
+extern MPI dsi_public_key[2]; /* dsi_sig_verify.c */
 
 unsigned long int total_jiffies = 0;
 
@@ -395,6 +395,110 @@ void dsi_file_free_security(struct file *file)
 	}
 }
 
+/**
+ * Basic verification of an ELF header
+ * 
+ * @param elf_hdr pointer to an elfhdr
+ * @return 0 if header ok
+ */
+static inline int elf_sanity_check(struct elfhdr *elf_hdr)
+{
+	if (memcmp(elf_hdr->e_ident, ELFMAG, SELFMAG) != 0) {
+		DSM_PRINT(DEBUG_SIGN, "%s: Binary is not elf format\n",
+			  __FUNCTION__);
+		return -1;
+	}
+
+	if (!elf_hdr->e_shoff) {
+		DSM_ERROR("%s: No section header!\n", __FUNCTION__);
+		return -1;
+	}
+
+	if (elf_hdr->e_shentsize != sizeof(Elf32_Shdr)) {
+		DSM_ERROR("%s: Section header is wrong size!\n", __FUNCTION__);
+		return -1;
+	}
+
+	if (elf_hdr->e_shnum > 65536U / sizeof(Elf32_Shdr)) {
+		DSM_ERROR("%s: Too many entries in Section Header!\n",
+			  __FUNCTION__);
+		return -1;
+	}
+
+	return 0;
+}
+
+static inline struct elfhdr *read_elf_header(struct file *file)
+{
+	struct elfhdr *elf_ex;
+
+	elf_ex =
+	    (struct elfhdr *)kmalloc(sizeof(struct elfhdr), DSI_SAFE_ALLOC);
+	if (!elf_ex) {
+		DSM_ERROR ("%s: kmalloc failed for elf_ex\n", __FUNCTION__);
+		return NULL;
+	}
+
+	kernel_read(file, 0, (char *)elf_ex, sizeof(struct elfhdr));
+
+	if (elf_sanity_check(elf_ex)) {
+		kfree(elf_ex);
+		return NULL;
+	}
+
+	return elf_ex;
+}
+
+static inline Elf32_Shdr *
+read_section_header(struct file *file, int sh_size, int sh_off)
+{
+	Elf32_Shdr *elf_shdata;
+	int retval;
+	
+	elf_shdata = (Elf32_Shdr *) kmalloc(sh_size, DSI_SAFE_ALLOC);
+	if (!elf_shdata) {
+		DSM_ERROR("%s: Cannot allocate memory to read Section Header\n",
+			  __FUNCTION__);
+		return NULL;
+	}
+
+	retval = kernel_read(file, sh_off, (char *)elf_shdata, sh_size);
+
+	if (retval < 0 || retval != sh_size) {
+		DSM_ERROR("%s: Unable to read binary %s: %d\n", __FUNCTION__,
+			  file->f_dentry->d_name.name, retval);
+		kfree(elf_shdata);
+		return NULL;
+	}
+	return elf_shdata;
+}
+
+/**
+ * We don't want to validate files which can be written while they are
+ * being executed.
+ * This means NFS.
+ */
+static inline int is_unprotected_file(struct file *file)
+{
+	if (strcmp(file->f_dentry->d_inode->i_sb->s_type->name, "nfs") == 0)
+		return 1;
+	return 0;
+}
+
+
+#define start_digsig_bench \
+	if (DIGSIG_BENCH) \
+		exec_time = jiffies;
+
+#define end_digsig_bench \
+	if (DIGSIG_BENCH) { \
+		exec_time = jiffies - exec_time; \
+		total_jiffies += exec_time; \
+		DSM_PRINT(DEBUG_TIME, \
+			"Time to execute %s on %s is %li\n", \
+			__FUNCTION__, file->f_dentry->d_name.name, exec_time); \
+	}
+	
 int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 {
 	struct elfhdr *elf_ex;
@@ -406,19 +510,25 @@ int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 	Elf32_Shdr *elf_shdata;
 	char *sig_orig;
 	long exec_time = 0;
-	char *buf;
 
 	if (!g_init)
 		return 0;
 
-	if (!file)
-		return 0;
 	if (!(prot & VM_EXEC))
+		return 0;
+	if (!file)
 		return 0;
 	if (!file->f_dentry)
 		return 0;
 	if (!file->f_dentry->d_name.name)
 		return 0;
+
+	if (is_unprotected_file(file))
+		return DIGSIG_MODE;
+
+	start_digsig_bench;
+
+	DSM_PRINT(DEBUG_SIGN, "binary is %s\n", file->f_dentry->d_name.name);
  
 	/*
 	 * if file_security is set, then this process has already
@@ -432,92 +542,33 @@ int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 			return retval;
 	}
 
-	if (DIGSIG_BENCH)	/* measure exec time only on DEBUG mode. */
-		exec_time = jiffies;
-
-	DSM_PRINT(DEBUG_SIGN, "binary is %s\n", file->f_dentry->d_name.name);
-
+	retval = 0;
 	if (is_cached_signature(file->f_dentry->d_inode)) {
-		DSM_PRINT(DEBUG_SIGN, "Binary %s had a cached signature validation.\n", file->f_dentry->d_name.name);
-		retval = 0;
+		DSM_PRINT(DEBUG_SIGN, "Binary %s had a cached signature validation.\n", 
+			  file->f_dentry->d_name.name);
 		allow_write_on_exit = 0;
 		goto out_file_no_buf;
 	}
 
-	buf = kmalloc (BINPRM_BUF_SIZE, DSI_SAFE_ALLOC);
-	if (!buf) {
-		DSM_ERROR ("kmalloc failed in dsi_file_mmap for buf\n");
-		retval = 0;
+	elf_ex = read_elf_header(file);
+	if (IS_ERR(elf_ex)) {
+		retval = PTR_ERR(elf_ex);
 		goto out_file_no_buf;
 	}
 
-	/* Get the exec-header, the original bprm->buf is no longer reliable at this point */
-	kernel_read(file, 0, buf, BINPRM_BUF_SIZE);
-	elf_ex = (struct elfhdr *) buf;
-
-	if (memcmp(elf_ex->e_ident, ELFMAG, SELFMAG) != 0) {
-		DSM_PRINT(DEBUG_SIGN,
-			  "dsi_file_mmap: Binary is not elf format\n");
-		retval = 0;
-		/* ToDO: Makan, we decide to let go the not elf binaries.
-		   ?? This is not obvious, we cannot sign a non-elf binary, should
-		   we only check elf files and not execute the non-elf
-		   binaries???? */
-		goto out_file;
-	}
-
-	if (elf_ex->e_type != ET_EXEC && elf_ex->e_type != ET_DYN) {
-		DSM_PRINT(DEBUG_SIGN, "dsi_file_mmap: Binary is not executable\n");
-		retval = 0;	/* ToDO: Makan, we decide to let go the not executable binaries. */
-		goto out_file;
-	}
-
-	/* Now read in all of the section header entries */
-	if (!elf_ex->e_shoff) {
-		DSM_ERROR("dsi_file_mmap: No section header!\n");
-		retval = DIGSIG_MODE;
-		goto out_file;
-	}
-
-	if (elf_ex->e_shentsize != sizeof(Elf32_Shdr)) {
-		DSM_ERROR ("dsi_file_mmap: Section header is wrong size!\n");
-		retval = DIGSIG_MODE;
-		goto out_file;
-	}
-
-	if (elf_ex->e_shnum > 65536U / sizeof(Elf32_Shdr)) {
-		DSM_ERROR ("dsi_file_mmap: Too many entries in Section Header!\n");
-		retval = DIGSIG_MODE;
-		goto out_file;
-	}
+	retval = DIGSIG_MODE;
 
 	size = elf_ex->e_shnum * sizeof(Elf32_Shdr);
-
-	elf_shdata = (Elf32_Shdr *) kmalloc(size, DSI_SAFE_ALLOC);
-	if (!elf_shdata) {
-		DSM_ERROR ("dsi_file_mmap: Cannot allocate memory to read Section Header\n");
-		retval = DIGSIG_MODE;
-		goto out_file;
-	}
-
-	retval = kernel_read (file, elf_ex->e_shoff, (char *) elf_shdata, size);
-
-	if (retval < 0 || retval != size) {
-		DSM_ERROR ("dsi_file_mmap: Unable to read binary %s: %d\n",
-			   file->f_dentry->d_name.name, retval);
-		kfree (elf_shdata);
-		retval = DIGSIG_MODE;
-		goto out_file;
-	}
+	elf_shdata = read_section_header(file, size, elf_ex->e_shoff);
+	if (IS_ERR(elf_shdata))
+		goto out_with_file;
 
 	/* Find signature section */
-	if ((sig_orig = dsi_find_signature (elf_ex, elf_shdata, file,
-					    &sh_offset)) == NULL) {
-		retval = DIGSIG_MODE;
-		DSM_PRINT(DEBUG_SIGN,"dsi_file_mmap: Signature not found for the binary: %s !\n", 
-			  file->f_dentry->d_name.name);
-		kfree (elf_shdata);
-		goto out_file;
+	sig_orig = dsi_find_signature(elf_ex, elf_shdata, file, &sh_offset);
+	if (sig_orig == NULL) {
+		DSM_ERROR("%s: Signature not found for the binary: %s !\n", 
+			  __FUNCTION__, file->f_dentry->d_name.name);
+		goto out_free_shdata;
 	}
 
 	/* Verify binary's signature */
@@ -525,44 +576,35 @@ int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 
 	if (!retval) {
 		DSM_PRINT(DEBUG_SIGN,
-			  "dsi_file_mmap: Signature verification successful\n");
-		if (!strcmp (file->f_dentry->d_inode->i_sb->s_type->name, "nfs")) {
-			DSM_PRINT (DEBUG_SIGN, "File on NFS : no caching\n");
-			kfree (sig_orig);
-			kfree (elf_shdata);
-			goto out_file;
-		}
+			  "%s: Signature verification successful\n", __FUNCTION__);
 		dsi_cache_signature(file->f_dentry->d_inode);
-
 		allow_write_on_exit = 0;
 	} else if (retval > 0) {
-		DSM_ERROR("dsi_file_mmap: Signature do not match for %s\n", file->f_dentry->d_name.name);
+		DSM_ERROR("%s: Signature do not match for %s\n",
+			  __FUNCTION__, file->f_dentry->d_name.name);
 		retval = -EPERM;
 	} else {
 		DSM_PRINT(DEBUG_SIGN,
-			  "dsi_file_mmap: Signature verification failed because of errors: %d for %s\n",
-			  retval, file->f_dentry->d_name.name);
+			  "%s: Signature verification failed because of errors: %d for %s\n",
+			  __FUNCTION__, retval, file->f_dentry->d_name.name);
 		retval = -EPERM;
 	}
 
 	kfree (sig_orig);
+ out_free_shdata:
 	kfree (elf_shdata);
 
- out_file:
-	kfree (buf);
+ out_with_file:
+	kfree (elf_ex);
  out_file_no_buf:
  	if (allow_write_on_exit) {
 		dsi_allow_write_access(file);
 		file->f_security = NULL;
 	}
 
-	if (DIGSIG_BENCH) {	/* measure exec time only on DEBUG mode. */
-		exec_time = jiffies - exec_time;
-		total_jiffies += exec_time;
-		DSM_PRINT(DEBUG_TIME, "Time to execute dsi_file_mmap on %s is %li\n", file->f_dentry->d_name.name, exec_time);
-	}
-	return retval;
+	end_digsig_bench;
 
+	return retval;
 }
 
 void security_set_operations(struct security_operations *ops)
@@ -616,6 +658,8 @@ static void __exit digsig_exit_module(void)
 	dsi_cleanup_sysfs ();
 	dsi_cleanup_revocation ();
 	dsi_cache_cleanup ();
+	mpi_free(dsi_public_key[0]);
+	mpi_free(dsi_public_key[1]);
 	if (secondary) {
 		DSM_PRINT (DEBUG_INIT, "Attempting to unregister from primary module\n");
 		if (mod_unreg_security ("digsig_verif", &dsi_security_ops)) {
