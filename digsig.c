@@ -375,14 +375,14 @@ static void digsig_file_free_security(struct file *file)
  * Basic verification of an ELF header
  * 
  * @param elf_hdr pointer to an elfhdr
- * @return 0 if header ok
+ * @return 0 if header ok, -2 if non-elf, -1 otherwise
  */
 static inline int elf_sanity_check(struct elfhdr *elf_hdr)
 {
 	if (memcmp(elf_hdr->e_ident, ELFMAG, SELFMAG) != 0) {
 		DSM_PRINT(DEBUG_SIGN, "%s: Binary is not elf format\n",
 			  __FUNCTION__);
-		return -1;
+		return -2;
 	}
 
 	if (!elf_hdr->e_shoff) {
@@ -404,9 +404,17 @@ static inline int elf_sanity_check(struct elfhdr *elf_hdr)
 	return 0;
 }
 
+/*
+ * If we decide mmap of nonelf is bad, we can make this -EPERM.
+ * However, note that bsign does mmap of SYSV shmem, so we can't
+ * run bsign under digsig...  that's just funny :)
+ */
+#define NONELF_PERM NULL
+
 static inline struct elfhdr *read_elf_header(struct file *file)
 {
 	struct elfhdr *elf_ex;
+	int retval;
 
 	elf_ex = kmalloc(sizeof(struct elfhdr), DIGSIG_SAFE_ALLOC);
 	if (!elf_ex) {
@@ -416,9 +424,13 @@ static inline struct elfhdr *read_elf_header(struct file *file)
 
 	kernel_read(file, 0, (char *)elf_ex, sizeof(struct elfhdr));
 
-	if (elf_sanity_check(elf_ex)) {
+	retval = elf_sanity_check(elf_ex);
+	if (retval) {
 		kfree(elf_ex);
-		return ERR_PTR(-EINVAL);
+		if (retval == -1)
+			return ERR_PTR(-EINVAL);
+		else
+			return NONELF_PERM;
 	}
 
 	return elf_ex;
@@ -477,7 +489,7 @@ static inline int is_unprotected_file(struct file *file)
 static int digsig_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 {
 	struct elfhdr *elf_ex;
-	int retval;
+	int retval, die_if_elf = 0;
 	/* allow_write_on_exit: 1 if we've revoked write access, but the
 	 * signature ended up bad (ie we won't allow execute access anyway) */
 	int allow_write_on_exit = 0;
@@ -514,7 +526,7 @@ static int digsig_file_mmap(struct file * file, unsigned long prot, unsigned lon
 		allow_write_on_exit = 1;
 		retval = digsig_deny_write_access(file); 
 		if (retval)
-			return retval;
+			die_if_elf = retval;
 	}
 
 	retval = 0;
@@ -526,9 +538,16 @@ static int digsig_file_mmap(struct file * file, unsigned long prot, unsigned lon
 	}
 
 	elf_ex = read_elf_header(file);
+	if (elf_ex == NULL) /* non-ELF, perhaps SYSV shmem */
+		goto out_file_no_buf;
 	if (IS_ERR(elf_ex)) {
 		retval = PTR_ERR(elf_ex);
 		goto out_file_no_buf;
+	}
+	if (die_if_elf) {
+		/* this ELF file is being written to, can't mmap(EXEC) it! */
+		retval = die_if_elf;
+		goto out_with_file;
 	}
 
 	retval = DIGSIG_MODE;
