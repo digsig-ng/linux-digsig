@@ -99,7 +99,7 @@ struct digsig_hash_struct {
 
 static struct digsig_hash_struct *digsig_hashes = NULL;
 static struct list_head digsig_hash_lru;
-static int max_hashed_sigs = 128, num_hashed_sigs = 0;
+static int max_hashed_sigs = 512, num_hashed_sigs = 0;
 MODULE_PARM(max_hashed_sigs, "i");
 MODULE_PARM_DESC(max_hashed_sigs, "Number of signatures to keep hashed\n");
 spinlock_t digsig_hash_lock = SPIN_LOCK_UNLOCKED;
@@ -301,7 +301,6 @@ add_signature_hash(struct inode *inode)
 
 	spin_lock(&digsig_hash_lock);
 	if (num_hashed_sigs >= max_hashed_sigs) {
-	  /* if (!del_hashes(num_hashed_sigs/3 + 1)) { */ 
 	        if (!del_hashes(4)) {
 			DSM_PRINT(DEBUG_SIGN,
 				"digsig: unable to clear cache entries\n");
