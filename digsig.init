@@ -1,14 +1,14 @@
 #!/bin/sh
 
-# Root or die
-if [ "$(id -u)" != "0" ]
-then
-  echo "You must be root to load or unload kernel modules"
-  exit 1
-fi
 
 case "$1" in
     start)
+# Root or die
+	if [ "$(id -u)" != "0" ]
+	    then
+	    echo "You must be root to load or unload kernel modules"
+	    exit 1
+	fi
 	echo "Loading Digsig module."
 	/sbin/insmod -f ./digsig_verif.ko || exit 1
 	echo "Making device for communication with the module."	
@@ -19,6 +19,12 @@ case "$1" in
 	echo "Done."
 	;;
     stop)
+# Root or die
+	if [ "$(id -u)" != "0" ]
+	    then
+	    echo "You must be root to load or unload kernel modules"
+	    exit 1
+	fi
 	echo -n "Unloading Digsig"
 	rmmod digsig_verif
 	rm -f /dev/Digsig

@@ -34,6 +34,16 @@
 #include "dsi_dev.h"
 #include "dsi_sig_verify.h"
 
+/* For use with LTM, we copy everything except the first three bytes
+   which are 'n' or 'e' + size.
+   For use with GnuPG, we should copy everything except the first byte
+*/
+#ifdef DIGSIG_LTM
+#define KEY_OFFSET 3
+#else
+#define KEY_OFFSET 1
+#endif
+
 extern int g_init;
 extern unsigned char *raw_public_key_n;
 extern unsigned char *raw_public_key_e;
@@ -42,7 +52,12 @@ extern int dsi_mpi_size_e;
 int device_file_major = 0;
 
 /********************************************************************************
-Description : This function reads the public key parts: e and n. 
+Description : This function reads the public key parts
+We receive first n (the modulus) and then e (public exponent). They follow
+this format:
+ - 1 byte : character 'n' or 'e'
+ - 2 bytes: length of MPI in BITS
+ - MPI
 Parameters  : 
 Return value: 
 *********************************************************************************/
@@ -50,55 +65,42 @@ ssize_t dsi_write(struct file *filp, const char *buff, size_t count,
 		  loff_t * offp)
 {
 
-/*	int i;*/
-	if (g_init)		// do not accept to re-initialize the module with
-		// new public key. This avoids many coherency
-		// problem when updating jeys while checking the
-		// signatures.
+	/* do not accept to re-initialize the module with
+	   new public key. This avoids many coherency
+	   problem when updating jeys while checking the
+	   signatures.*/
+	if (g_init)
 		return -1;
 
-	if (buff[0] == 'n') {
+	switch (buff[0]) {
+
+	case 'n':
 		raw_public_key_n =
-		    (unsigned char *) kmalloc(count - 1, DSI_SAFE_ALLOC);
+			(unsigned char *) kmalloc(count - KEY_OFFSET, DSI_SAFE_ALLOC);
 		if (!raw_public_key_n) {
 			DSM_ERROR("kmalloc fail for n in dsi_write\n");
 			return -ENOMEM;
 		}
-		if (copy_from_user(raw_public_key_n, &buff[1], count - 1))
+		if (copy_from_user(raw_public_key_n, &buff[KEY_OFFSET], count - KEY_OFFSET))
 			return -EFAULT;
-		dsi_mpi_size_n = count - 1;
+		dsi_mpi_size_n = count - KEY_OFFSET;
 		DSM_PRINT(DEBUG_DEV, "pkey->n size is %i\n",
 			  dsi_mpi_size_n);
-		/* 
-		DSM_PRINT(DEBUG_DEV, "pkey->n MPI:\n{ ");
-		for (i = 0; i < dsi_mpi_size_n; i++) {
-			DSM_PRINT(DEBUG_DEV, "%#x, ",
-				  raw_public_key_n[i] & 0xff);
-		}
-		DSM_PRINT(DEBUG_DEV, "}\n");
-		*/ 
-
-	} else if (buff[0] == 'e') {
+		break;
+	case 'e':
 		raw_public_key_e =
-		    (unsigned char *) kmalloc(count - 1, DSI_SAFE_ALLOC);
+			(unsigned char *) kmalloc(count - KEY_OFFSET, DSI_SAFE_ALLOC);
 		if (!raw_public_key_e) {
 			DSM_ERROR("kmalloc fail for e in dsi_write\n");
 			return -ENOMEM;
 		}
-		if (copy_from_user(raw_public_key_e, &buff[1], count - 1))
+		if (copy_from_user(raw_public_key_e, &buff[KEY_OFFSET], count - KEY_OFFSET))
 			return -EFAULT;
-		dsi_mpi_size_e = count - 1;
+		dsi_mpi_size_e = count - KEY_OFFSET;
 		DSM_PRINT(DEBUG_DEV, "pkey->e size is %i\n",
 			  dsi_mpi_size_e);
-		/* 
-		DSM_PRINT(DEBUG_DEV, "pkey->e MPI:\n{ ");
-		for (i = 0; i < dsi_mpi_size_e; i++) {
-			DSM_PRINT(DEBUG_DEV, "%#x, ",
-				  raw_public_key_e[i] & 0xff);
-		}
-		DSM_PRINT(DEBUG_DEV, "}\n");
-		*/ 
-	} else {
+		break;
+	default:
 		return -EINVAL;
 	}
 

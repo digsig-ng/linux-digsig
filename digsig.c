@@ -34,11 +34,16 @@
 #include <linux/dcache.h>
 
 #include "dsi_sig_verify.h"
-#include "gnupg/mpi/mpi.h"
-#include "gnupg/cipher/rsa-verify.h"
 #include "dsi_debug.h"
 #include "dsi.h"
 #include "dsi_dev.h"
+
+#ifdef DIGSIG_LTM
+#include "ltm/tommath.h"
+#else
+#include "gnupg/mpi/mpi.h"
+#include "gnupg/cipher/rsa-verify.h"
+#endif
 
 
 #ifdef DSI_DIGSIG_DEBUG
@@ -47,18 +52,24 @@
 #define DIGSIG_MODE -EPERM	/*restrictive mode */
 #endif
 
+#ifdef MP_LOW_MEM
+#define TAB_SIZE 32
+#else
+#define TAB_SIZE 256
+#endif
 
-/*
- * External variables
- */
-
-extern MPI *dsi_public_key[2];
+#ifdef DIGSIG_LTM
+extern mp_int dsi_public_key[2]; /* dsi_sig_verify.c */
+unsigned char *packed;
+mp_int *M, *W, *W2;
+#else
+extern MPI *dsi_public_key[2]; /* dsi_sig_verify.c */
+#endif
+extern int device_file_major;
 
 /* Allocate and free functions for each kind of security blob. */
-static spinlock_t dsi_bprm_alloc_lock = SPIN_LOCK_UNLOCKED;
 static struct semaphore dsi_digsig_sem;
 
-extern int device_file_major;
 struct file_operations dsi_fops = {
 	owner:THIS_MODULE,
 	write:dsi_write,
@@ -68,17 +79,13 @@ struct file_operations dsi_fops = {
 int g_init = 0;
 
 int DSIDebugLevel = DEBUG_INIT | DEBUG_DEV | DEBUG_SIGN;
+
 struct security_operations dsi_security_ops;
 
 #define set_dsi_ops(ops, function)				\
 		if (!ops->function) {				\
 			ops->function = dsi_##function;		\
                 }
-
-
-/*
- * Internal functions
- */
 
 static char *dsi_find_signature(struct elfhdr *elf_ex,
 				Elf32_Shdr * elf_shdata,
@@ -132,19 +139,15 @@ static char *dsi_find_signature(struct elfhdr *elf_ex,
 			return NULL;
 		}
 
-		buffer =
-		    (char *) kmalloc(DSI_ELF_SIG_SIZE, DSI_SAFE_ALLOC);
-
+		buffer = (char *) kmalloc(DSI_ELF_SIG_SIZE, DSI_SAFE_ALLOC);
 		if (!buffer) {
-			DSM_PRINT(DEBUG_SIGN,
-				  "dsi_bprm_compute_creds: Cannot allocate memory for signature buffer.\n");
+			DSM_ERROR ("kmalloc failed in dsi_find_signature for buffer.\n");
 			return NULL;
 		}
 
-		retval =
-		    kernel_read(file, elf_shdata[i].sh_offset,
-				(char *) buffer, DSI_ELF_SIG_SIZE);
-		if (retval < 0 || retval != DSI_ELF_SIG_SIZE) {
+		retval = kernel_read(file, elf_shdata[i].sh_offset,
+				     (char *) buffer, DSI_ELF_SIG_SIZE);
+		if ((retval < 0) || (retval != DSI_ELF_SIG_SIZE)) {
 			DSM_PRINT(DEBUG_SIGN,
 				  "dsi_bprm_compute_creds: Unable to read signature: %d\n",
 				  retval);
@@ -202,12 +205,14 @@ dsi_verify_signature(char *filename, Elf32_Shdr * elf_shdata,
 	}
 
 	sig_result = (char *) kmalloc(DSI_ELF_SIG_SIZE, DSI_SAFE_ALLOC);
-	read_blocks =
-	    (char *) kmalloc(DSI_ELF_READ_BLOCK_SIZE, DSI_SAFE_ALLOC);
-
-	if (!sig_result || !read_blocks) {
-		DSM_PRINT(DEBUG_SIGN,
-			  "dsi_bprm_compute_creds Cannot allocate memory for buffers.\n");
+	read_blocks = (char *) kmalloc(DSI_ELF_READ_BLOCK_SIZE, DSI_SAFE_ALLOC);
+	if (!sig_result) {
+		DSM_ERROR ("kmalloc failed in dsi_verify_signature for sig_result.\n");
+		up (&dsi_digsig_sem);
+		return -ENOMEM;
+	}
+	if (!read_blocks) {
+		DSM_ERROR ("kmalloc failed in dsi_verify_signature for read_block.\n");
 		up (&dsi_digsig_sem);
 		return -ENOMEM;
 	}
@@ -217,9 +222,8 @@ dsi_verify_signature(char *filename, Elf32_Shdr * elf_shdata,
 	for (offset = 0; offset < stat.size;
 	     offset += DSI_ELF_READ_BLOCK_SIZE) {
 
-		size =
-		    kernel_read(file, offset, (char *) read_blocks,
-				DSI_ELF_READ_BLOCK_SIZE);
+		size = kernel_read(file, offset, (char *) read_blocks,
+				   DSI_ELF_READ_BLOCK_SIZE);
 		if (size <= 0) {
 			DSM_PRINT(DEBUG_SIGN,
 				  "dsi_bprm_compute_creds Unable to read signature in blocks: %d\n",
@@ -237,10 +241,9 @@ dsi_verify_signature(char *filename, Elf32_Shdr * elf_shdata,
 		if ((lower < offset + DSI_ELF_READ_BLOCK_SIZE) &&
 		    (offset < upper)) {
 			lower = (offset > lower) ? offset : lower;
-			upper =
-			    (offset + DSI_ELF_READ_BLOCK_SIZE <
-			     upper) ? offset +
-			    DSI_ELF_READ_BLOCK_SIZE : upper;
+			upper =	(offset + DSI_ELF_READ_BLOCK_SIZE <
+				 upper) ? offset +
+				DSI_ELF_READ_BLOCK_SIZE : upper;
 
 			memset(read_blocks + (lower - offset), 0,
 			       upper - lower);
@@ -258,9 +261,8 @@ dsi_verify_signature(char *filename, Elf32_Shdr * elf_shdata,
 	}
 
 	/* A bit of bsign formatting else hashes won't match, works with bsign v0.4.4 */
-	if ((retval =
-	     dsi_sign_verify_final(ctx, sig_result, DSI_ELF_SIG_SIZE,
-				   sig_orig + DSI_BSIGN_INFOS)) < 0) {
+	if ((retval = dsi_sign_verify_final(ctx, sig_result, DSI_ELF_SIG_SIZE,
+					    sig_orig + DSI_BSIGN_INFOS)) < 0) {
 		DSM_PRINT(DEBUG_SIGN,
 			  "dsi_bprm_compute_creds Error calculating final crypto verification\n");
 		kfree(sig_result);
@@ -305,28 +307,26 @@ int dsi_bprm_check_security(struct linux_binprm *bprm)
 	unsigned int size;
 	Elf32_Shdr *elf_shdata;
 	struct file *file;
-	unsigned long flags;
 	char *sig_orig;
 	long exec_time;
 
 	if (!g_init)
 		return 0;
 
-	if (!DIGSIG_MODE)	// measure exec time only on DEBUG mode. 
+	if (!DIGSIG_MODE)	/* measure exec time only on DEBUG mode. */
 		exec_time = jiffies;
 
 	DSM_PRINT(DEBUG_SIGN, "binary is %s\n", bprm->filename);
+
 	file = filp_open(bprm->filename, O_RDONLY, 0);
 	if (!file && IS_ERR(file)) {
-		DSM_ERROR
-		    ("dsi_bprm_compute_creds: Problem opening file!\n");
+		DSM_ERROR ("dsi_bprm_check_security: Problem opening file %s!\n", bprm->filename);
 		retval = DIGSIG_MODE;
 		goto out_file;
 	}
 
 	if (!file->f_op || !file->f_op->mmap) {
-		DSM_ERROR
-		    ("dsi_bprm_compute_creds: Not allowed to read file\n");
+		DSM_ERROR ("dsi_bprm_compute_creds: Not allowed to read file %s\n", bprm->filename);
 		retval = DIGSIG_MODE;
 		goto out_file;
 	}
@@ -338,17 +338,17 @@ int dsi_bprm_check_security(struct linux_binprm *bprm)
 	if (memcmp(elf_ex.e_ident, ELFMAG, SELFMAG) != 0) {
 		DSM_PRINT(DEBUG_SIGN,
 			  "dsi_bprm_compute_creds: Binary is not elf format\n");
-		retval = 0;	// ToDO: Makan, we decide to let go the not elf binaries.
-		// ?? This is not obvious, we cannot sign a non-elf binary, should
-		// we only check elf files and not execute the non-elf
-		// binaries????
+		retval = 0;
+		/* ToDO: Makan, we decide to let go the not elf binaries.
+		   ?? This is not obvious, we cannot sign a non-elf binary, should
+		   we only check elf files and not execute the non-elf
+		   binaries???? */
 		goto out_file;
 	}
 
 	if (elf_ex.e_type != ET_EXEC && elf_ex.e_type != ET_DYN) {
-		DSM_PRINT(DEBUG_SIGN,
-			  "dsi_bprm_compute_creds: Binary is not executable\n");
-		retval = 0;	// ToDO: Makan, we decide to let go the not executable binaries. 
+		DSM_PRINT(DEBUG_SIGN, "dsi_bprm_compute_creds: Binary is not executable\n");
+		retval = 0;	/* ToDO: Makan, we decide to let go the not executable binaries. */
 		goto out_file;
 	}
 
@@ -360,58 +360,46 @@ int dsi_bprm_check_security(struct linux_binprm *bprm)
 	}
 
 	if (elf_ex.e_shentsize != sizeof(Elf32_Shdr)) {
-		DSM_ERROR
-		    ("dsi_bprm_compute_creds: Section header is wrong size!\n");
+		DSM_ERROR ("dsi_bprm_compute_creds: Section header is wrong size!\n");
 		retval = DIGSIG_MODE;
 		goto out_file;
 	}
 
 	if (elf_ex.e_shnum > 65536U / sizeof(Elf32_Shdr)) {
-		DSM_ERROR
-		    ("dsi_bprm_compute_creds: Too many entries in Section Header!\n");
+		DSM_ERROR ("dsi_bprm_compute_creds: Too many entries in Section Header!\n");
 		retval = DIGSIG_MODE;
 		goto out_file;
 	}
 
 	size = elf_ex.e_shnum * sizeof(Elf32_Shdr);
 
-	spin_lock_irqsave(&dsi_bprm_alloc_lock, flags);
 	elf_shdata = (Elf32_Shdr *) kmalloc(size, DSI_SAFE_ALLOC);
-	spin_unlock_irqrestore(&dsi_bprm_alloc_lock, flags);
-
 	if (!elf_shdata) {
-		DSM_ERROR
-		    ("dsi_bprm_compute_creds: Cannot allocate memory to read Section Header\n");
+		DSM_ERROR ("dsi_bprm_compute_creds: Cannot allocate memory to read Section Header\n");
 		retval = DIGSIG_MODE;
 		goto out_file;
 	}
 
-	retval =
-	    kernel_read(file, elf_ex.e_shoff, (char *) elf_shdata, size);
+	retval = kernel_read(file, elf_ex.e_shoff, (char *) elf_shdata, size);
 
 	if (retval < 0 || retval != size) {
-		DSM_ERROR
-		    ("dsi_bprm_compute_creds: Unable to read binary %s: %d\n",
-		     bprm->filename, retval);
+		DSM_ERROR ("dsi_bprm_compute_creds: Unable to read binary %s: %d\n",
+			   bprm->filename, retval);
 		kfree(elf_shdata);
 		retval = DIGSIG_MODE;
 		goto out_file;
 	}
 
 	/* Find signature section */
-	if ((sig_orig =
-	     dsi_find_signature(&elf_ex, elf_shdata, file,
-				&sh_offset)) == NULL) {
-		kfree(sig_orig);	/* sig_orig now points to allocated memory
-					   after internal_find_signature */
+	if ((sig_orig = dsi_find_signature(&elf_ex, elf_shdata, file,
+					   &sh_offset)) == NULL) {
 		retval = DIGSIG_MODE;
 		goto out_file;
 	}
 
 	/* Verify binary's signature */
-	retval =
-	    dsi_verify_signature(bprm->filename, elf_shdata, sig_orig,
-				 file, sh_offset);
+	retval = dsi_verify_signature(bprm->filename, elf_shdata,
+				      sig_orig, file, sh_offset);
 
 	if (!retval) {
 		DSM_PRINT(DEBUG_SIGN,
@@ -428,10 +416,10 @@ int dsi_bprm_check_security(struct linux_binprm *bprm)
 
 	kfree(sig_orig);
 
-      out_file:
+ out_file:
 	filp_close(file, 0);
 
-	if (!DIGSIG_MODE) {	// measure exec time only on DEBUG mode. 
+	if (!DIGSIG_MODE) {	/* measure exec time only on DEBUG mode. */
 		exec_time = jiffies - exec_time;
 		DSM_PRINT(DEBUG_SIGN, "Time to execute dsi_bprm_check_security on %s is %li\n", bprm->filename, exec_time);
 	}
@@ -457,19 +445,42 @@ static int __init digsig_init_module(void)
 
 	/* register */
 	if ((err = register_security(&dsi_security_ops))) {
-		DSM_ERROR
-		    ("< dsi_init_module():Wrong security parameter\n");
+		DSM_ERROR ("< dsi_init_module():Wrong security parameter\n");
 		return err;
 	}
 
 	/* Opening Device interface /dev/dsi_module */
 	device_file_major = register_chrdev(0, "Digsig_module", &dsi_fops);
 	if (device_file_major < 0) {
-		DSM_ERROR
-		    ("< dsi_init_module(): Can't get a device major number\n");
+		DSM_ERROR ("< dsi_init_module(): Can't get a device major number\n");
 		return device_file_major;
 	}
 	init_MUTEX (&dsi_digsig_sem);
+#ifdef DIGSIG_LTM
+	DSM_PRINT(DEBUG_SIGN, "Initializing public key holder\n");
+	mp_init(&dsi_public_key[0]);
+	mp_init(&dsi_public_key[1]);
+	packed = kmalloc (2048 * sizeof(unsigned char), DSI_SAFE_ALLOC);
+	if (!packed) {
+		DSM_ERROR ("kmalloc failed in digsig_init_module for packed\n");
+		return -ENOMEM;
+	}
+	M = kmalloc (TAB_SIZE * sizeof (mp_int), DSI_SAFE_ALLOC);
+	if (!M) {
+		DSM_ERROR ("kmalloc failed in digsig_init_module for M\n");
+		return -ENOMEM;
+	}
+	W = kmalloc (MP_WARRAY * sizeof (mp_word), DSI_SAFE_ALLOC);
+	if (!W) {
+		DSM_ERROR ("kmalloc failed in digsig_init_module for W\n");
+		return -ENOMEM;
+	}
+	W2 = kmalloc (MP_WARRAY * sizeof(mp_word), DSI_SAFE_ALLOC);
+	if (!W2) {
+		DSM_ERROR ("kmalloc failed in digsig_init_module for W2\n");
+		return -ENOMEM;
+	}
+#endif
 
 	return 0;
 }
@@ -480,6 +491,15 @@ static void __exit digsig_exit_module(void)
 	dsi_sign_verify_free();
 	unregister_chrdev(device_file_major, "Digsig_module");
 	unregister_security(&dsi_security_ops);
+#ifdef DIGSIG_LTM
+	DSM_PRINT(DEBUG_SIGN, "Deinitializing public key holder\n");
+	mp_clear(&dsi_public_key[0]);
+	mp_clear(&dsi_public_key[1]);
+	kfree (packed);
+	kfree (M);
+	kfree (W);
+	kfree (W2);
+#endif
 }
 
 module_init(digsig_init_module);

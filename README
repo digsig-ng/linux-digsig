@@ -29,18 +29,19 @@ OpenSSL is 4 times faster than GPG regarding RSA verification. As a
 future direction, we plan to clarify this licensing issue and use (if
 possible) OpenSSL instead of GPG.
 
-Another new direction under investigation is to use the Tom St-denis's
-crypto library at http://math.libtomcrypt.org/.
+We integrated the the Tom St-denis's crypto library at
+http://math.libtomcrypt.org/ to digsig.  It's now possible to use it if
+you define digsig-ltm in the Makefile.
 
 Requirements:
 ==============
 
-Linux OS kernel 2.5.66 or  higher. 
+Linux OS kernel 2.5.66 or higher.
 
 Bsign version
 0.4.5. (http://packages.debian.org/unstable/admin/bsign.html)
 
-GPG 1.2.2 or higher. 
+GPG 1.2.2 or higher.
 
 Performances
 =============== 
@@ -55,7 +56,7 @@ running Linux 2.5.66. Our benchmarks show that the execution time
 loaded (no changes for fork call, as the binary is not loaded into
 memory).
 
-Micro tests: 
+Micro tests with gnupg: 
 
 We present below the overhead at kernel-level for checking the
 signature.
@@ -78,8 +79,34 @@ Time is in jiffies -> 1 jiffies = 1ms
 Linear regression
 time = 1.393899E-5 * size + 0.815081 
 
+Micro tests with libtommath: 
 
-A Very simple scenraio to show how to use it  
+We present below the overhead at kernel-level for checking the
+signature.
+
+Always on a Pentium IV, 2.2 GHz, 512 mega bytes of memory, running
+Linux 2.6.0-test6:
+
++-----------+---------+----------+
+| Binairies |   Size  |   Time   |
++-----------+---------+----------+
+|        ls |   68230 |  2.58537 |
+|        ps |   70337 |  2.40000 |
+|   busybox |  248801 |  5.48485 |
+|       cvs |  672532 | 12.33898 |
+|       vim | 1894305 | 32.52632 |
+|     emacs | 4093614 | 68.26087 |
++-----------+---------+----------+
+Each binairy has been executed 30 time
+Time is in jiffies -> 1 jiffies = 1ms
+
+linear regression
+ltm   -> time = 1.635071E-5 * size + 1.393258
+
+It is somewaht slower then gnupg but we think it is possible to
+optimize it to be faster.
+
+A Very simple scenario to show how to use it  
 =======================================
 
 1) Generate gpg key and export your public key in order to use it for
@@ -98,7 +125,7 @@ example.
 
 $cp `which ps` ps-test
 $bsign -s ps-test // sign the binary 
-$bsign -v ps-test // be sure that the signature is valid  
+$bsign -V ps-test // be sure that the signature is valid  
 
 3) Make the digsig module 
 

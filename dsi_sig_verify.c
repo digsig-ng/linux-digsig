@@ -1,7 +1,7 @@
 /*
  * Distributed Security Module (DSM)
  *
- * dsi_verify.c
+ * dsi_sig_verify.c
  *
  * Copyright (C) 2003 Ericsson, Inc
  *
@@ -22,8 +22,8 @@
 
 #include "dsi.h"
 #include "dsi_debug.h"
-#include "gnupg/cipher/rsa-verify.h"
 #include "dsi_sig_verify.h"
+#include "gnupg/cipher/rsa-verify.h"
 
 /*
  * Public key format: 2 MPIs
@@ -76,16 +76,13 @@ SIGCTX *dsi_sign_verify_init(int hashalgo, int signalgo)
 	SIGCTX *ctx;
 
 	/* allocating signature context */
-
 	ctx = (SIGCTX *) kmalloc(sizeof(SIGCTX), GFP_KERNEL);
-
 	if (ctx == NULL) {
 		DSM_ERROR("Cannot allocate ctx\n");
 		return NULL;
 	}
 
 	ctx->tvmem = kmalloc(TVMEMSIZE, GFP_KERNEL);
-
 	if (ctx->tvmem == NULL) {
 		kfree(ctx);
 		DSM_ERROR("Cannot allocate plaintext buffer\n");
@@ -159,18 +156,26 @@ int
 dsi_sign_verify_final(SIGCTX * ctx, char *sig, int siglen /* PublicKey */ ,
 		      unsigned char *signed_hash)
 {
-	char digest[gDigestLength[ctx->digestAlgo]];
+/*	char digest[gDigestLength[ctx->digestAlgo]];*/
+	char *digest;
 	int rc = -1;
 
+	digest = kmalloc (gDigestLength[ctx->digestAlgo], DSI_SAFE_ALLOC);
+	if (!digest) {
+		DSM_ERROR ("kmalloc failed in dsi_sign_verify_final for digest\n");
+		return -ENOMEM;
+	}
 	/* TO DO: check the length of the signature: it should be equal to the length
 	   of the modulus */
 	if ((rc = dsi_sha1_final(ctx, digest)) < 0) {
 		DSM_ERROR
 		    ("dsi_sign_verify_final Cannot finalize hash algorithm\n");
+		kfree (digest);
 		return rc;
 	}
 
 	if (siglen < gDigestLength[ctx->digestAlgo]) {
+		kfree (digest);
 		return -2;
 	}
 	memcpy(sig, digest, gDigestLength[ctx->digestAlgo]);
@@ -190,6 +195,7 @@ dsi_sign_verify_final(SIGCTX * ctx, char *sig, int siglen /* PublicKey */ ,
 	/* do not free SHA1-TFM. For optimization, we choose always to use the same one */
 	kfree(ctx->tvmem);
 	kfree(ctx);
+	kfree (digest);
 	return rc;
 }
 
@@ -223,29 +229,23 @@ int dsi_init_pkey(const char read_par)
 
 	switch (read_par) {
 
-	case 'n':{
-			DSM_PRINT(DEBUG_SIGN,
-				  "Reading raw_public_key_n!\n");
-			nread = dsi_mpi_size_n;
-			dsi_public_key[0] =
-			    mpi_read_from_buffer(raw_public_key_n, &nread,
-						 0);
-			return 0;
-		}
-	case 'e':{
-			DSM_PRINT(DEBUG_SIGN,
-				  "Reading raw_public_key_e!\n");
-			nread = dsi_mpi_size_e;
-			dsi_public_key[1] =
-			    mpi_read_from_buffer(raw_public_key_e, &nread,
-						 0);
-			return 0;
-		}
+	case 'n':
+		DSM_PRINT(DEBUG_SIGN, "Reading raw_public_key_n!\n");
+		nread = dsi_mpi_size_n;
+		dsi_public_key[0] =
+			mpi_read_from_buffer(raw_public_key_n, &nread,
+					     0);
+		break;
+	case 'e':
+		DSM_PRINT(DEBUG_SIGN, "Reading raw_public_key_e!\n");
+		nread = dsi_mpi_size_e;
+		dsi_public_key[1] =
+			mpi_read_from_buffer(raw_public_key_e, &nread,
+					     0);
+		break;
+	}
 
-	};
-
-
-	return 0;		/* you never get here ! */
+	return 0;
 }
 
 /******************************************************************************
@@ -268,14 +268,20 @@ int dsi_rsa_bsign_verify(unsigned char *hash_format, int length,
 	unsigned char sig_timestamp[SIZEOF_UNSIGNED_INT];
 	int i;
 	SIGCTX *ctx = NULL;
-	unsigned char new_sig[gDigestLength[HASH_SHA1]];
+	unsigned char *new_sig;
+/*	unsigned char new_sig[gDigestLength[HASH_SHA1]];*/
+
+	new_sig = kmalloc (gDigestLength[HASH_SHA1], DSI_SAFE_ALLOC);
+	if (!new_sig) {
+		DSM_ERROR ("kmalloc failed in dsi_rsa_bsign_verify for new_sig\n");
+		return -ENOMEM;
+	}
 
 	/* Get MPI of signed data from .sig file/section */
 	nread = DSI_ELF_SIG_SIZE;
 
-	data =
-	    mpi_read_from_buffer(signed_hash + DSI_RSA_DATA_OFFSET, &nread,
-				 0);
+	data = mpi_read_from_buffer(signed_hash + DSI_RSA_DATA_OFFSET, &nread,
+				    0);
 
 	/* Get MPI for hash */
 	/* bsign modif - file hash - gpg modif */
@@ -283,18 +289,18 @@ int dsi_rsa_bsign_verify(unsigned char *hash_format, int length,
 	/* gpg modif:   add class and timestamp at end */
 
 	ctx = (SIGCTX *) kmalloc(sizeof(SIGCTX), GFP_KERNEL);
-
 	if (ctx == NULL) {
 		DSM_ERROR("Cannot allocate ctx\n");
-		return -1;
+		kfree (new_sig);
+		return -ENOMEM;
 	}
 
 	ctx->tvmem = kmalloc(TVMEMSIZE, GFP_KERNEL);
-
 	if (ctx->tvmem == NULL) {
-		kfree(ctx);
+		kfree (ctx);
+		kfree (new_sig);
 		DSM_ERROR("Cannot allocate plaintext buffer\n");
-		return -1;
+		return -ENOMEM;
 	}
 
 	dsi_sha1_init(ctx);
@@ -308,6 +314,7 @@ int dsi_rsa_bsign_verify(unsigned char *hash_format, int length,
 	}
 
 	if (ctx == NULL) {
+		kfree (new_sig);
 		return -1;
 	}
 
@@ -319,6 +326,7 @@ int dsi_rsa_bsign_verify(unsigned char *hash_format, int length,
 	if ((rc = dsi_sha1_final(ctx, new_sig)) < 0) {
 		DSM_ERROR
 		    ("internal_rsa_verify_final Cannot finalize hash algorithm\n");
+		kfree (new_sig);
 		return rc;
 	}
 
@@ -334,6 +342,7 @@ int dsi_rsa_bsign_verify(unsigned char *hash_format, int length,
 
 	m_free(hash);
 	m_free(data);
+	kfree (new_sig);
 	return rc;
 }
 
