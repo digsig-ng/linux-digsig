@@ -264,7 +264,7 @@ alloc_digsig_hash(struct inode *inode, struct digsig_hash_struct *next)
 {
 	struct digsig_hash_struct *new;
 
-	new = kmalloc(sizeof(struct digsig_hash_struct), GFP_KERNEL);
+	new = kmalloc(sizeof(struct digsig_hash_struct), GFP_ATOMIC); /* GFP_KERNEL); */ 
 	if (!new)
 		return ERR_PTR(-ENOMEM);
 
@@ -345,8 +345,8 @@ init_caching(void){
         int tmp;
         
 	digsig_hashes = kmalloc(max_hashed_sigs * 
-			sizeof(struct digsig_hash_struct),
-			GFP_KERNEL);
+				sizeof(struct digsig_hash_struct), GFP_ATOMIC); 
+				/* GFP_KERNEL); */ 
 	
 	if (IS_ERR(digsig_hashes)) {
 	  DSM_PRINT(DEBUG_ERROR, "No memory to initialize digsig hash!\n");
