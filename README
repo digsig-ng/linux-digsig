@@ -48,7 +48,8 @@ sign to get a fully operational system.
  -DDSI_EXEC_ONLY: DigSig normally verifies the signatures for
  executable binaries and shared librairies. If you wish for
  performance reason or whatever other reason to only verify the
- signatures for executable binaries set this variable.
+ signatures for executable binaries set this variable. This options
+ have been removed du to insecurity.
  
  -DDIGSIG_LOG: This activates the logging. Be careful about the amount
  of log to be generated at run time. 

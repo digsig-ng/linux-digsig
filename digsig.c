@@ -117,11 +117,9 @@ dsi_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
 		return 0;
 
 	if (inode && mask & MAY_WRITE) {
-#ifndef DSI_EXEC_ONLY
 		unsigned long isec = get_inode_security(inode);
 		if (isec > 0)
 			return -EPERM;
-#endif
 		if (is_cached_signature(inode))
 			remove_signature(inode);
 	}
@@ -344,7 +342,7 @@ dsi_verify_signature(Elf32_Shdr * elf_shdata,
 	up (&dsi_digsig_sem);
 	return retval;
 }
-#ifndef DSI_EXEC_ONLY
+
 /*
  * If the file is opened for writing, deny mmap(PROT_EXEC) access.
  * Otherwise, increment the inode->i_security, which is our own
@@ -566,183 +564,13 @@ int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 	return retval;
 
 }
-#endif /* DSI_EXEC_ONLY for dsi_file_mmap */
-/******************************************************************************
-Description :
-We don't have to check if file is regular, exists, or is zero
-size. This hook follows many tests concerning this. However, since we
-only support ELF files, we need a simple check to make sure the file
-is an ELF. Remember, this hook is called after the kernel fct
-search_binary_handlers which in itself does extensive verification of
-the binary to determine its format.
-
-We do not need to verify ELF header, since it has been done in
-load_elf_binary(). We must determine if this is an ELF, because this
-hook might be called for other binary formats. We *do* need to verify
-the ELF's integrity, because only header integrity is checked by
-kernel.
-
-We need to open file, bprm->file handle is not reliable at this point.
-
-Careful!!! endian type is platform dependent, big endian is assumed for i386
-
-Parameters  : 
-Return value: 
-******************************************************************************/
-#ifdef DSI_EXEC_ONLY
-int dsi_bprm_check_security(struct linux_binprm *bprm)
-{
-	struct elfhdr elf_ex;
-	int retval, sh_offset;
-	unsigned int size;
-	Elf32_Shdr *elf_shdata;
-	struct file *file;
-	char *sig_orig;
-	long exec_time = 0;
-
-	if (!g_init)
-		return 0;
-
-	if (DIGSIG_BENCH)	/* measure exec time only on DEBUG mode. */
-		exec_time = jiffies;
-
-	DSM_PRINT(DEBUG_SIGN, "binary is %s\n", bprm->filename);
-
-	file = filp_open(bprm->filename, O_RDONLY, 0);
-	if (!file && IS_ERR(file)) {
-		DSM_ERROR ("dsi_bprm_check_security: Problem opening file %s!\n", bprm->filename);
-		retval = DIGSIG_MODE;
-		goto out_file;
-	}
-
-	if (is_cached_signature(file->f_dentry->d_inode)) {
-		DSM_PRINT(DEBUG_SIGN, "Binary %s had a cached signature validation.\n", bprm->filename);
-		retval = 0;
-		goto out_file;
-	}
-
-	if (!file->f_op || !file->f_op->mmap) {
-		DSM_ERROR ("dsi_bprm_compute_creds: Not allowed to read file %s\n", bprm->filename);
-		retval = DIGSIG_MODE;
-		goto out_file;
-	}
-
-	/* Get the exec-header, the original bprm->buf is no longer reliable at this point */
-	kernel_read(file, 0, bprm->buf, BINPRM_BUF_SIZE);
-	elf_ex = *((struct elfhdr *) bprm->buf);
-
-	if (memcmp(elf_ex.e_ident, ELFMAG, SELFMAG) != 0) {
-		DSM_PRINT(DEBUG_SIGN,
-			  "dsi_bprm_compute_creds: Binary is not elf format\n");
-		retval = 0;
-		/* ToDO: Makan, we decide to let go the not elf binaries.
-		   ?? This is not obvious, we cannot sign a non-elf binary, should
-		   we only check elf files and not execute the non-elf
-		   binaries???? */
-		goto out_file;
-	}
-
-	if (elf_ex.e_type != ET_EXEC && elf_ex.e_type != ET_DYN) {
-		DSM_PRINT(DEBUG_SIGN, "dsi_bprm_compute_creds: Binary is not executable\n");
-		retval = 0;	/* ToDO: Makan, we decide to let go the not executable binaries. */
-		goto out_file;
-	}
-
-	/* Now read in all of the section header entries */
-	if (!elf_ex.e_shoff) {
-		DSM_ERROR("dsi_bprm_compute_creds: No section header!\n");
-		retval = DIGSIG_MODE;
-		goto out_file;
-	}
-
-	if (elf_ex.e_shentsize != sizeof(Elf32_Shdr)) {
-		DSM_ERROR ("dsi_bprm_compute_creds: Section header is wrong size!\n");
-		retval = DIGSIG_MODE;
-		goto out_file;
-	}
-
-	if (elf_ex.e_shnum > 65536U / sizeof(Elf32_Shdr)) {
-		DSM_ERROR ("dsi_bprm_compute_creds: Too many entries in Section Header!\n");
-		retval = DIGSIG_MODE;
-		goto out_file;
-	}
-
-	size = elf_ex.e_shnum * sizeof(Elf32_Shdr);
-
-	elf_shdata = (Elf32_Shdr *) kmalloc(size, DSI_SAFE_ALLOC);
-	if (!elf_shdata) {
-		DSM_ERROR ("dsi_bprm_compute_creds: Cannot allocate memory to read Section Header\n");
-		retval = DIGSIG_MODE;
-		goto out_file;
-	}
-
-	retval = kernel_read(file, elf_ex.e_shoff, (char *) elf_shdata, size);
-
-	if (retval < 0 || retval != size) {
-		DSM_ERROR ("dsi_bprm_compute_creds: Unable to read binary %s: %d\n",
-			   bprm->filename, retval);
-		kfree(elf_shdata);
-		retval = DIGSIG_MODE;
-		goto out_file;
-	}
-
-	/* Find signature section */
-	if ((sig_orig = dsi_find_signature(&elf_ex, elf_shdata, file,
-					   &sh_offset)) == NULL) {
-		retval = DIGSIG_MODE;
-		kfree (elf_shdata);
-		goto out_file;
-	}
-
-	/* Verify binary's signature */
-	retval = dsi_verify_signature (elf_shdata, sig_orig, file, sh_offset);
-
-	if (!retval) {
-		DSM_PRINT(DEBUG_SIGN,
-			  "dsi_bprm_compute_creds: Signature verification successful for %s\n", bprm->filename);
-		if (!strcmp (file->f_dentry->d_inode->i_sb->s_type->name, "nfs")) {
-			DSM_PRINT (DEBUG_SIGN, "File on NFS : no caching\n");
-			kfree (sig_orig);
-			kfree (elf_shdata);
-			goto out_file;
-		}
-		dsi_cache_signature(file->f_dentry->d_inode);
-	} else if (retval > 0) {
-		DSM_ERROR("dsi_bprm_compute_creds: Signature do not match for %s\n", bprm->filename);
-		retval = -EPERM;
-	} else {
-		DSM_PRINT(DEBUG_SIGN,
-			  "dsi_bprm_compute_creds: Signature verification failed because of errors: %d for %s\n",
-			  retval, bprm->filename);
-		retval = -EPERM;
-	}
-
-	kfree(sig_orig);
-	kfree (elf_shdata);
-
- out_file:
-	filp_close(file, 0);
-
-	if (DIGSIG_BENCH) {	/* measure exec time only on DEBUG mode. */
-		exec_time = jiffies - exec_time;
-		total_jiffies += exec_time;
-		DSM_PRINT(DEBUG_TIME, "Time to execute dsi_bprm_check_security on %s is %li\n", bprm->filename, exec_time);
-	}
-	return retval;
-}
-#endif /* DSI_EXEC_ONLY for dsi_bprm_check_security */
 
 void security_set_operations(struct security_operations *ops)
 {
-#ifdef DSI_EXEC_ONLY
-	set_dsi_ops(ops, bprm_check_security);
-#else
 	set_dsi_ops (ops, file_mmap);
 	set_dsi_ops (ops, file_free_security);
-#endif
 	set_dsi_ops(ops, inode_permission);
 	set_dsi_ops(ops, inode_unlink);
-
 }
 
 static int __init digsig_init_module(void)
