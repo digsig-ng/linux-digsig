@@ -51,18 +51,17 @@ There has already been several initiatives in this domain,
 such as Tripwire, BSign, Cryptomark, and IBM's Signed Executables \cite{Tripwire, Bsign, Cryptomark, IBM-sign}
 but we believe the DigSig project is the first to be both 
 easily accessible to all (available on Sourceforge, 
-under the GPL license) and to operate at kernel level (see Tab. 1).
-
+under the GPL license) and to operate at kernel level (see Table \ref{tab:userspace}).
 
 \begin{table}[ht]
 \begin{center}
-\begin{tabular}{|p{2cm}|l|l|l|l|}
+\begin{tabular}{|p{1.8cm}|p{1.6cm}|p{1.4cm}|c|p{3cm}|}
 \hline
  & Real-time signature verification & File type & Level & Availability \\ 
 \hline
 Tripwire    & No           & All       & User      & Commercial  \& GPL \\ 
 \hline
-Cryptomark  & Yes          & Binaries  & Kernel    & CryptoMark's web: "Not  \\& & & &  ready for public release" \\
+Cryptomark  & Yes          & Binaries  & Kernel    & CryptoMark's web: "Not ready for public release" \\
 \hline
 Signed  Executables    & Yes          & Binaries \& scripts & Kernel    & Not GPL   \\     
 \hline
@@ -128,22 +127,26 @@ used to sign the binaries.
 
 In the following we show step by step how to sign the executable "ps":
 
+\small
 \begin{verbatim} 
 $ cp `which ps` ps-test
 $ bsign -s ps-test // Sign the binary
 $ bsign -V ps-test // Verify the validity of the signature 
 \end{verbatim} 
+\normalsize
 
 Then, you need to install the DigSig kernel module. To do so, a recent
 kernel version is required (25.66 or more), compiled with security
 options enabled (CONFIG\_SECURITY$=$y).  To compile DigSig, assuming your
 kernel source directory is /usr/src/linux-2.5.66, you do:
 
+\small
 \begin{verbatim} 
 $ cd digsig
 $ make -C /usr/src/linux-2.5.66 SUBDIRS=$PWD modules
 $ cd digsig/tools && make
 \end{verbatim} 
+\normalsize
 
 This builds the DigSig kernel module (digsig\_verifko), and you are
 probably already half-way through the command to load it, but wait !
@@ -160,9 +163,11 @@ recommend you initially run DigSig in debug mode. To do this, compile
 DigSig with the DSI\_DIGSIG\_DEBUG and DSI\_DEBUG flags set in the
 Makefile:
 
+\small
 \begin{verbatim} 
 EXTRA_CFLAGS += -DDSI_DEBUG -DDSI_DIGSIG_DEBUG -I $(obj)
 \end{verbatim} 
+\normalsize
 
 In debug mode, DigSig lets unsigned binaries run. This state is ideal
 to test DigSig, and also list the binaries you need to sign to get a
@@ -172,12 +177,15 @@ Once this precaution has been taken, it is now time to load the DigSig
 module, with your public key as argument. BSign uses GnuPG keys to
 sign binaries, so retrieve your public key as follows:
 
+\small
 \begin{verbatim} 
 $ gpg --export >> my_public_key.pub 
-\end{verbatim} 
+\end{verbatim}
+\normalsize
 
 Then, log as root, and use the digsig.init script to load the module.
 
+\small
 \begin{verbatim} 
 # ./digsig.init start my_public_key.pub
 Testing if sysfs is mounted in /sys.
@@ -186,35 +194,41 @@ Loading Digsig module.
 Loading public key.
 Done.
 \end{verbatim} 
+\normalsize
 
 This is it: signature verification are activated. You can check the 
 signed ps executable (ps-test) works:
 
+\small
 \begin{verbatim} 
 $./ps-test
 $ su
 Password:
 # tail -f /var/log/messages
 colby kernel: DSI-LSM MODULE - binary is ./ps-test
-colby kernel: DSI-LSM MODULE - dsi_bprm_compute_creds: Found signature 
-                                                                 section
-colby kernel: DSI-LSM MODULE - dsi_bprm_compute_creds: Signature verification 
-                                                                 successful
-\end{verbatim} 
+colby kernel: DSI-LSM MODULE - dsi_bprm_compute_creds:
+                      Found signature section
+colby kernel: DSI-LSM MODULE - dsi_bprm_compute_creds:
+                      Signature verification successful
+\end{verbatim}
+\normalsize
 
 But, corrupted executables won't run:
+\small
 \begin{verbatim} 
 $ ./ps-corrupt
 bash: ./ps-corrupt: Operation not permitted 
 colby kernel: DSI-LSM MODULE - binary is ./ps-corrupt
-colby kernel: DSI-LSM MODULE Error - dsi_bprm_compute_creds: Signatures 
-                                         do not match for ./ps-corrupt
+colby kernel: DSI-LSM MODULE Error - dsi_bprm_compute_creds:
+                      Signatures do not match for ./ps-corrupt
 \end{verbatim} 
+\normalsize
 
 If the permissive debug mode is set, signature verification is skipped
 for unsigned binaries.  Otherwise, the control is strictly enforced in
 the normal behavior:
 
+\small
 \begin{verbatim} 
 $ ./ps
 bash: ./ps: cannot execute binary file 
@@ -222,9 +236,10 @@ bash: ./ps: cannot execute binary file
 Password: 
 # tail -f /var/log/messages
 colby kernel: DSI-LSM MODULE - binary is ./ps
-colby kernel: DSI-LSM MODULE - dsi_bprm_compute_creds: Signatures 
-                                                        do not match
-\end{verbatim} 
+colby kernel: DSI-LSM MODULE - dsi_bprm_compute_creds:
+                      Signatures do not match
+\end{verbatim}
+\normalsize
 
 \section{DigSig, behind the scene}
 
@@ -250,7 +265,7 @@ file\_mmap(), and finally bprm\_free\_security().
 %<< include System-call.jpg >>
 %Fig.1: Control flow in binary execution
 
-\begin{figure}[h]
+\begin{figure}[htb]
 \begin{center}
 \epsfxsize=12cm 
 \epsfbox{System-call}
@@ -277,7 +292,7 @@ of the signature section. A short compatibility note: GnuPG adds a
 32-byte timestamp and a signature class identifier in the
 buffer it signs.
 
-\begin{figure}[h]
+\begin{figure}[htb]
 \begin{center}
 \epsfxsize=12cm 
 \epsfbox{ELF-Format}
@@ -334,14 +349,16 @@ how long it takes to run an executable with or without DigSig.
 To do so, we used the command 'time' over fast to longer executions. 
 The following benchmark has been run 20 times:
 
+\small
 \begin{verbatim} 
 % time /bin/ls -Al		  # times /bin/ls
 % time ./digsig.init compile      # times compilation with gcc
 % time tar jxvfp linux-2.6.0-test8.tar.bz2 # times tar
 \end{verbatim} 
+\normalsize
 
 On a Pentium 4, 2.2 Ghz, with 512 MB of RAM, with DigSig using GnuPG's
-math library, we have obtained results displayed at Table 2. They
+math library, we have obtained results displayed at Table \ref{tab:exectime}. They
 clearly show that the impact of DigSig is quite important for short
 executions (such as ls) but soon becomes completely negligeable for
 longer executions such as compiling a project with gcc, or untarring
@@ -360,7 +377,7 @@ With DigSig    & 0.008 & 16.550 & 36.7333 \\
 \hline
 \end{tabular}
 \caption{Average execution time in seconds with or without DigSig.}
-\label{tab:userspace}
+\label{tab:exectime}
 \end{center}
 \end{table}
 
@@ -381,7 +398,7 @@ and at the end of bprm\_check\_security. In brief, jiffies represent
 the number of clock ticks since the system has booted, so they
 are a precise way to measure time in the Linux kernel. In our case,
 jiffies are in milliseconds. We have run each binary 30 times
-(see Tab 3) for DigSig compiled with GnuPG.
+(see Table \ref{tab:overhead}) for DigSig compiled with GnuPG.
 
 \begin{table}[ht]
 \begin{center}
@@ -404,7 +421,7 @@ emacs & 4093614 & 67.41176 \\
 \end{tabular}
 \caption{Average DigSig overhead, in milliseconds, for various 
 binaries.}
-\label{tab:userspace}
+\label{tab:overhead}
 \end{center}
 \end{table}
 
@@ -429,26 +446,45 @@ overhead increases with executable's size (which is not a surprise
 because it takes longer to hash all data).
 
 Finally, to assist us in optimizing our code, we have run Oprofile
-\cite{OProfile}, a system profiler for Linux, over DigSig (see Figure 3). Results
+\cite{OProfile}, a system profiler for Linux, over DigSig (see Table \ref{tab:Oprofile}). Results
 clearly indicate that the modular exponentiation routines are the most
 expensive, so this is where we should concentrate our optimization
 efforts for future releases. More particularly, we plan to port ASM
 code of math libraries to the kernel, instead of using pure C code.
 
-\begin{verbatim} 
-CPU: CPU with timer interrupt, speed 2398.91 MHz (estimated)
-Profiling through timer interrupt
-vma      samples  %           image name       app name     symbol name
-00001150 401      42.5239     digsig_verif.ko  digsig_verif mpihelp_submul_1
-00001090 198      20.9968     digsig_verif.ko  digsig_verif mpihelp_addmul_1
-00000e90 109      11.5589     digsig_verif.ko  digsig_verif dsi_sha1_update
-00002fa0 77        8.1654     digsig_verif.ko  digsig_verif mpihelp_divrem
-00000fd0 32        3.3934     digsig_verif.ko  digsig_verif mpihelp_mul_1
-00001300 27        2.8632     digsig_verif.ko  digsig_verif mpihelp_add_n
-00001290 15        1.5907     digsig_verif.ko  digsig_verif mpihelp_sub_n
+\begin{table}[ht]
+\begin{center}
+\begin{tabular}{l r r @{.} l r @{.} l c r}
+\multicolumn{8}{c}{CPU: CPU with timer interrupt, speed 2398.91 MHz (estimated)} \\
+\multicolumn{8}{c}{Profiling through timer interrupt} \\
+vma & samples & \multicolumn{2}{c}{\%} & \multicolumn{2}{c}{image name} & app name & symbol name \\
+00001150 & 401 & 42&5239 & digsig\_verif&ko & digsig\_verif & mpihelp\_submul\_1 \\
+00001090 & 198 & 20&9968 & digsig\_verif&ko & digsig\_verif & mpihelp\_addmul\_1 \\
+00000e90 & 109 & 11&5589 & digsig\_verif&ko & digsig\_verif & dsi\_sha1\_update \\
+00002fa0 & 77 & 8&1654 & digsig\_verif&ko & digsig\_verif & mpihelp\_divrem \\
+00000fd0 & 32 & 3&3934 & digsig\_verif&ko & digsig\_verif & mpihelp\_mul\_1 \\
+00001300 & 27 & 2&8632 & digsig\_verif&ko & digsig\_verif & mpihelp\_add\_n \\
+00001290 & 15 & 1&5907 & digsig\_verif&ko & digsig\_verif & mpihelp\_sub\_n \\
+\end{tabular}
+\caption{OProfile report for DigSig.}
+\label{tab:Oprofile}
+\end{center}
+\end{table} 
 
-                    Fig 3. OProfile report for DigSig. 
-\end{verbatim} 
+%%\begin{verbatim} 
+%%CPU: CPU with timer interrupt, speed 2398.91 MHz (estimated)
+%%Profiling through timer interrupt
+%%vma      samples  %           image name       app name     symbol name
+%%00001150 401      42.5239     digsig_verif.ko  digsig_verif mpihelp_submul_1
+%%00001090 198      20.9968     digsig_verif.ko  digsig_verif mpihelp_addmul_1
+%%00000e90 109      11.5589     digsig_verif.ko  digsig_verif dsi_sha1_update
+%%00002fa0 77        8.1654     digsig_verif.ko  digsig_verif mpihelp_divrem
+%%00000fd0 32        3.3934     digsig_verif.ko  digsig_verif mpihelp_mul_1
+%%00001300 27        2.8632     digsig_verif.ko  digsig_verif mpihelp_add_n
+%%00001290 15        1.5907     digsig_verif.ko  digsig_verif mpihelp_sub_n
+%%
+%%                    Fig 3. OProfile report for DigSig. 
+%%\end{verbatim} 
 
 \section{Caching}
 
@@ -501,69 +537,82 @@ actual kernel.  Care was taken to compile all kernels with the same configuratio
 Each test was performed three times.
 
 \begin{figure}
+\begin{center}
 \begin{tabular}{|l|r|r|r|}
 \hline
-	Kernel without Digsig & & & \\
+\multicolumn{4}{|c|}{Kernel without Digsig} \\
+\hline
 	real  &  0m59.937s &0m59.175s &0m58.493s \\
 	user  &  0m42.058s &0m42154s &0m42.225s \\
 	sys   &  0m4.005s  &0m3.939s  &0m3.895s \\
 \hline
-	Digsig without caching & & & \\
+\multicolumn{4}{|c|}{Digsig without caching} \\
+\hline
 	real  &  1m0.405s  & 0m59.361s & 0m59.329s \\
 	user  &  0m42.269s & 0m42.226s & 0m42.190s \\
 	sys   &  0m3.981s  & 0m3.927s  & 0m4.005s \\
 \hline
-	Digsig with caching & & & \\
+\multicolumn{4}{|c|}{Digsig with caching} \\
+\hline
 	real  &  0m59.660s & 0m59.827s & 0m59.724s \\
 	user  &  0m42.178s & 0m42195s & 0m42.120s \\
 	sys   &  0m4.008s  & 0m3.921s  & 0m3.940s \\
 \hline
 \end{tabular}
 \caption{Time required for ``tar jxvfp linux-2.6.0-test8.tar.bz2''}\label{fig:tartimings}
+\end{center}
 \end{figure}
-
 \begin{figure}
+\begin{center}
 \begin{tabular}{|l|r|r|r|}
 \hline
-	Kernel without Digsig & & & \\
+\multicolumn{4}{|c|}{Kernel without Digsig} \\
+\hline
 	real  &  0m0.065s &0m0.007s &0m0.006s \\
 	user  &  0m0.001s &0m0.002s &0m0.002s \\
 	sys   &  0m0.005s &0m0.003s &0m0.003s \\
 \hline
-	Digsig without caching & & & \\
+\multicolumn{4}{|c|}{Digsig without caching} \\
+\hline
 	real  &  0m0.049s &0m0.053s &0m0.048s \\
 	user  &  0m0.003s &0m0.001s &0m0.003s \\
 	sys   &  0m0.044s &0m0.042s &0m0.043s \\
 \hline
-	Digsig with caching & & & \\
+\multicolumn{4}{|c|}{Digsig with caching} \\
+\hline
 	real  &  0m0.025s& 0m0.006s &0m0.006s \\
 	user  &  0m0.001s& 0m0.000s &0m0.003s \\
 	sys   &  0m0.005s& 0m0.003s &0m0.004s \\
 \hline
 \end{tabular}
 \caption{Time required for ``/bin/ls -Al''}\label{fig:lstimings}
+\end{center}
 \end{figure}
-
 \begin{figure}
+\begin{center}
 \begin{tabular}{|l|r|r|r|}
 \hline
-	Kernel without Digsig & & & \\
+\multicolumn{4}{|c|}{Kernel without Digsig} \\
+\hline
 	real   & 0m22.836s& 0m15.716s &0m15.700s \\
 	user   & 0m14.291s& 0m14.207s &0m14.242s \\
 	sys    & 0m1.449s &0m1.461s &0m1.427s \\
 \hline
-	Digsig without caching & & & \\
+\multicolumn{4}{|c|}{Digsig without caching} \\
+\hline
 	real   & 0m42.597s& 0m32.629s &0m32.412s \\
 	user   & 0m14.577s& 0m14.513s &0m14.501s \\
 	sys    & 0m16.073s& 0m16.112s &0m16.158s \\
 \hline
-	Digsig with caching & & & \\
+\multicolumn{4}{|c|}{Digsig with caching} \\
+\hline
 	real   & 0m22.996s& 0m15.636s &0m15.612s \\
 	user   & 0m14.167s& 0m14.179s &0m14.108s \\
 	sys    & 0m1.543s &0m1.408s   & 0m1.477s \\
 \hline
 \end{tabular}
 \caption{Time required for ``/bin/ls -Al''}\label{fig:comptimings}
+\end{center}
 \end{figure}
 
 Since the signature validation occurs during {\tt execve}, we expect its
@@ -587,7 +636,13 @@ be its worst workloads.
 
 \section{Digital Signature of Shared Libraries}
 
-TO WRITE.
+By using the {\tt file_mmap} hook, DigSig can verify shared libraries.
+Each time a program ask for a library, the kernel map into memory some
+part of the library's file.  It does this by calling do_mmap.  The LSM hook 
+{\tt file_mmap} allow DigSig to intercep the shared library before it is 
+executed and to verify its signature. DigSig can then allow or deny the
+execution of the shared library.  Of course, if DigSig deny execution, the
+program asking for the library will crash with a segmentation fault error.
 
 \subsubsection*{End remark}
 
