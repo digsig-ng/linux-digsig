@@ -187,6 +187,9 @@ static char *dsi_find_signature(struct elfhdr *elf_ex,
 		i++;
 	}
 
+	if (i == elf_ex->e_shnum)
+		return NULL;
+
 	if (elf_shdata[i].sh_type == DSI_ELF_SIG_SECTION) {
 		DSM_PRINT(DEBUG_SIGN,
 			  "dsi_find_signature: Found signature section\n");

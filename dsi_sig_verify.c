@@ -284,6 +284,8 @@ int dsi_rsa_bsign_verify(unsigned char *hash_format, int length,
 
 	data = mpi_read_from_buffer(signed_hash + DSI_RSA_DATA_OFFSET, &nread,
 				    0);
+	if (!data)
+		return -EINVAL;
 
 	/* Get MPI for hash */
 	/* bsign modif - file hash - gpg modif */
