@@ -22,9 +22,9 @@
 #include "gnupg/mpi/mpi.h"
 
 
-#define DSI_ELF_SIG_SECTION 0x80736967	/* ((0x80 << 24)|('s' << 16)|('i' << 8)|'g') */
-#define DSI_ELF_SIG_SIZE 512	/* Total signature size */
-#define DSI_ELF_READ_BLOCK_SIZE 1024	/* Signature will be done in chunks of n bytes */
+#define DIGSIG_ELF_SIG_SECTION 0x80736967	/* ((0x80 << 24)|('s' << 16)|('i' << 8)|'g') */
+#define DIGSIG_ELF_SIG_SIZE 512	/* Total signature size */
+#define DIGSIG_ELF_READ_BLOCK_SIZE 1024	/* Signature will be done in chunks of n bytes */
 
 /* 
  * Format of digital signature done by bsign:
@@ -34,12 +34,12 @@
  * - digsig
  */
 
-#define DSI_BSIGN_VERSION    "0.4.5"
-#define DSI_BSIGN_STRING     "#1; bsign v" DSI_BSIGN_VERSION "\n"
-#define DSI_BSIGN_GREET_SIZE sizeof(DSI_BSIGN_STRING)-1
-#define DSI_BSIGN_HASH       20	/* sha1 hash */
-#define DSI_BSIGN_LEN_OFFSET 2	/* length of digsig added by bsign */
-#define DSI_BSIGN_INFOS      DSI_BSIGN_GREET_SIZE+DSI_BSIGN_HASH+DSI_BSIGN_LEN_OFFSET
+#define DIGSIG_BSIGN_VERSION    "0.4.5"
+#define DIGSIG_BSIGN_STRING     "#1; bsign v" DIGSIG_BSIGN_VERSION "\n"
+#define DIGSIG_BSIGN_GREET_SIZE sizeof(DIGSIG_BSIGN_STRING)-1
+#define DIGSIG_BSIGN_HASH       20	/* sha1 hash */
+#define DIGSIG_BSIGN_LEN_OFFSET 2	/* length of digsig added by bsign */
+#define DIGSIG_BSIGN_INFOS      DIGSIG_BSIGN_GREET_SIZE+DIGSIG_BSIGN_HASH+DIGSIG_BSIGN_LEN_OFFSET
 
 /* GPG .sig file/section structure:
  * 89     00 95 03          05      00    3F293CEB  
@@ -52,17 +52,17 @@
  * digest start[1] nbits of MPI MPI (as read by mpi_read)
  */
 
-#define DSI_RSA_CLASS_OFFSET     5
-#define DSI_RSA_TIMESTAMP_OFFSET 6
-#define DSI_RSA_DATA_OFFSET      22
+#define DIGSIG_RSA_CLASS_OFFSET     5
+#define DIGSIG_RSA_TIMESTAMP_OFFSET 6
+#define DIGSIG_RSA_DATA_OFFSET      22
 
 
 /*ToDO: makan: this is a constraint, we suppose that the max size of a
   big integer is 1024 bytes. This needs to be modified in order to
   have a dynamic way of allocating memory. */
 
-#define DSI_MPI_MAX_SIZE_N 1024
-#define DSI_MPI_MAX_SIZE_E 128
+#define DIGSIG_MPI_MAX_SIZE_N 1024
+#define DIGSIG_MPI_MAX_SIZE_E 128
 
 /**
  * Supported algorithms
@@ -80,13 +80,13 @@ typedef struct sig_ctx_st {
 
 extern int gDigestLength[1];
 
-SIGCTX *dsi_sign_verify_init(int hashalgo, int signalgo);
-int dsi_sign_verify_update(SIGCTX * ctx, char *buf, int buflen);
-int dsi_sign_verify_final(SIGCTX * ctx, char *sig,
+SIGCTX *digsig_sign_verify_init(int hashalgo, int signalgo);
+int digsig_sign_verify_update(SIGCTX * ctx, char *buf, int buflen);
+int digsig_sign_verify_final(SIGCTX * ctx, char *sig,
 			  int siglen /* PublicKey */ ,
 			  unsigned char *signed_hash);
-void dsi_sign_verify_free(void);
-int dsi_init_pkey(const char read_par, unsigned char *raw_public_key, int mpi_size);
+void digsig_sign_verify_free(void);
+int digsig_init_pkey(const char read_par, unsigned char *raw_public_key, int mpi_size);
 
 
 

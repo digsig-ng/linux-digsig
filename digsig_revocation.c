@@ -26,7 +26,7 @@
 #include "digsig_revocation.h"
 #include "dsi_sig_verify.h"
 
-#ifdef DSI_DIGSIG_DEBUG
+#ifdef DIGSIG_DEBUG
 #define DIGSIG_MODE 0		/*permissive  mode */
 #define DIGSIG_BENCH 1
 #else
@@ -34,23 +34,23 @@
 #define DIGSIG_BENCH 0
 #endif
 
-extern int DSIDebugLevel;
+extern int DigsigDebugLevel;
 
-extern int dsi_max_hashed_sigs, dsi_num_hashed_sigs;
-struct list_head dsi_revoked_sigs;
+extern int digsig_max_hashed_sigs, digsig_num_hashed_sigs;
+struct list_head digsig_revoked_sigs;
 
 /*
  * Description: Called at module unload to free the list of revoked
  * signatures
  */
-void dsi_free_revoked_sigs(void)
+void digsig_free_revoked_sigs(void)
 {
 	struct list_head *tmp;
 	struct revoked_sig *rsig;
 
-	while (!list_empty(&dsi_revoked_sigs)) {
-		tmp = dsi_revoked_sigs.next;
-		if (tmp != &dsi_revoked_sigs) {
+	while (!list_empty(&digsig_revoked_sigs)) {
+		tmp = digsig_revoked_sigs.next;
+		if (tmp != &digsig_revoked_sigs) {
 			list_del(tmp);
 			rsig = list_entry(tmp, struct revoked_sig, next);
 			mpi_free(rsig->sig);
@@ -63,21 +63,21 @@ void dsi_free_revoked_sigs(void)
 }
 
 /*
- * Description: Called at exec (dsi_verify_signature) to check whether the
+ * Description: Called at exec (digsig_verify_signature) to check whether the
  *  signature has been revoked.  If it has, exec permission is outright
  *  denied.
  */
-#ifdef DSI_REVOCATION
-int dsi_is_revoked_sig(char *buffer)
+#ifdef DIGSIG_REVOCATION
+int digsig_is_revoked_sig(char *buffer)
 {
 	struct list_head *tmp;
 	struct revoked_sig *rsig;
-	char *tmp1 = buffer + DSI_BSIGN_INFOS + DSI_RSA_DATA_OFFSET;
-	int count = DSI_ELF_SIG_SIZE - DSI_BSIGN_INFOS - DSI_RSA_DATA_OFFSET;
+	char *tmp1 = buffer + DIGSIG_BSIGN_INFOS + DIGSIG_RSA_DATA_OFFSET;
+	int count = DIGSIG_ELF_SIG_SIZE - DIGSIG_BSIGN_INFOS - DIGSIG_RSA_DATA_OFFSET;
 	int ret = 0;
 	MPI file_sig = mpi_read_from_buffer(tmp1, &count, 0);
 
-	list_for_each(tmp, &dsi_revoked_sigs) {
+	list_for_each(tmp, &digsig_revoked_sigs) {
 		rsig = list_entry(tmp, struct revoked_sig, next);
 		if (mpi_cmp(file_sig, rsig->sig) == 0) {
 			ret = 1;
@@ -91,12 +91,12 @@ out:
 }
 #endif
 
-inline void dsi_init_revocation()
+inline void digsig_init_revocation()
 {
-	INIT_LIST_HEAD(&dsi_revoked_sigs);
+	INIT_LIST_HEAD(&digsig_revoked_sigs);
 }
 
-inline void dsi_cleanup_revocation()
+inline void digsig_cleanup_revocation()
 {
-	dsi_free_revoked_sigs();
+	digsig_free_revoked_sigs();
 }

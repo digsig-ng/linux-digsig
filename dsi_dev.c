@@ -76,7 +76,7 @@ ssize_t dsi_write(struct file *filp, const char *buff, size_t count,
 
 	case 'n':
 		raw_public_key_n =
-			(unsigned char *) kmalloc(count - DSI_KEY_OFFSET, DSI_SAFE_ALLOC);
+			(unsigned char *) kmalloc(count - DSI_KEY_OFFSET, DIGSIG_SAFE_ALLOC);
 		if (!raw_public_key_n) {
 			DSM_ERROR("kmalloc fail for n in dsi_write\n");
 			return -ENOMEM;
@@ -89,7 +89,7 @@ ssize_t dsi_write(struct file *filp, const char *buff, size_t count,
 		break;
 	case 'e':
 		raw_public_key_e =
-			(unsigned char *) kmalloc(count - DSI_KEY_OFFSET, DSI_SAFE_ALLOC);
+			(unsigned char *) kmalloc(count - DSI_KEY_OFFSET, DIGSIG_SAFE_ALLOC);
 		if (!raw_public_key_e) {
 			DSM_ERROR("kmalloc fail for e in dsi_write\n");
 			return -ENOMEM;

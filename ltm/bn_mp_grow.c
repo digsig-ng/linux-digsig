@@ -38,7 +38,7 @@ int mp_grow(mp_int * a, int size)
 		 */
 		tmp =
 		    OPT_CAST kmalloc(sizeof(mp_digit) * size,
-				     DSI_SAFE_ALLOC);
+				     DIGSIG_SAFE_ALLOC);
 		if (tmp == NULL) {
 			/* reallocation failed but "a" is still valid [can be freed] */
 			return MP_MEM;

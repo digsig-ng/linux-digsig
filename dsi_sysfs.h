@@ -23,7 +23,7 @@ ssize_t	digsig_show (struct kobject *obj, struct attribute *attr, char *buff);
 ssize_t digsig_rev_list_store (struct kobject *obj, struct attribute *attr, const char *buff, size_t count);
 ssize_t digsig_rev_list_show (struct kobject *obj, struct attribute *attr, char *buff);
 
-int dsi_init_sysfs(void);
-void dsi_cleanup_sysfs(void);
+int digsig_init_sysfs(void);
+void digsig_cleanup_sysfs(void);
 
 #endif

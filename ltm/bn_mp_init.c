@@ -25,7 +25,7 @@ int mp_init(mp_int * a)
 	/* allocate memory required and clear it */
 	a->dp =
 	    (mp_digit *) kmalloc(sizeof(mp_digit) * MP_PREC,
-				 DSI_SAFE_ALLOC);
+				 DIGSIG_SAFE_ALLOC);
 	if (a->dp == NULL) {
 		return MP_MEM;
 	}

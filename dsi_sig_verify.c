@@ -33,13 +33,13 @@
  * n bytes: MPI (ie. 0x29)
  */
 
-extern int DSIDebugLevel;
+extern int DigsigDebugLevel;
 
 #define TVMEMSIZE	4096
 
 int gDigestLength[] = { /* SHA-1 */ 0x14 };
 static struct crypto_tfm *SHA1_TFM = NULL;
-MPI dsi_public_key[] = {MPI_NULL, MPI_NULL};
+MPI digsig_public_key[] = {MPI_NULL, MPI_NULL};
 
 
 /******************************************************************************
@@ -47,14 +47,14 @@ MPI dsi_public_key[] = {MPI_NULL, MPI_NULL};
 ******************************************************************************/
 
 static int
-dsi_rsa_bsign_verify(unsigned char *sha_cat, int length,
+digsig_rsa_bsign_verify(unsigned char *sha_cat, int length,
 		     unsigned char *signed_hash);
 
-static int dsi_sha1_init(SIGCTX * ctx);
+static int digsig_sha1_init(SIGCTX * ctx);
 
-static void dsi_sha1_update(SIGCTX * ctx, char *buf, int buflen);
+static void digsig_sha1_update(SIGCTX * ctx, char *buf, int buflen);
 
-static int dsi_sha1_final(SIGCTX * ctx, char *digest);
+static int digsig_sha1_final(SIGCTX * ctx, char *digest);
 
 
 /******************************************************************************
@@ -65,7 +65,7 @@ Parameters  :
 Return value: a signature context valid for this signature only
 ******************************************************************************/
 
-SIGCTX *dsi_sign_verify_init(int hashalgo, int signalgo)
+SIGCTX *digsig_sign_verify_init(int hashalgo, int signalgo)
 {
 	SIGCTX *ctx;
 
@@ -86,7 +86,7 @@ SIGCTX *dsi_sign_verify_init(int hashalgo, int signalgo)
 	/* checking hash algorithm is known */
 	switch (hashalgo) {
 	case HASH_SHA1:
-		if (dsi_sha1_init(ctx)) {
+		if (digsig_sha1_init(ctx)) {
 			DSM_ERROR("Initializing SHA1 failed\n");
 			kfree(ctx->tvmem);
 			kfree(ctx);
@@ -123,7 +123,7 @@ Parameters  :
   buflen length of buf
 Return value: 0 normally
 ******************************************************************************/
-int dsi_sign_verify_update(SIGCTX * ctx, char *buf, int buflen)
+int digsig_sign_verify_update(SIGCTX * ctx, char *buf, int buflen)
 {
 	switch (ctx->digestAlgo) {
 	case HASH_SHA1:
@@ -131,10 +131,10 @@ int dsi_sign_verify_update(SIGCTX * ctx, char *buf, int buflen)
 			return -1;
 		}
 
-		dsi_sha1_update(ctx, buf, buflen);
+		digsig_sha1_update(ctx, buf, buflen);
 		break;
 	default:
-		DSM_ERROR("dsi_sign_verify_update Unknown hash algo\n");
+		DSM_ERROR("%s: Unknown hash algo\n", __FUNCTION__);
 		return -1;
 	}
 
@@ -147,22 +147,22 @@ Parameters  :
 Return value: 
 ******************************************************************************/
 int
-dsi_sign_verify_final(SIGCTX * ctx, char *sig, int siglen /* PublicKey */ ,
+digsig_sign_verify_final(SIGCTX * ctx, char *sig, int siglen /* PublicKey */ ,
 		      unsigned char *signed_hash)
 {
 	char *digest;
 	int rc = -1;
 
-	digest = kmalloc (gDigestLength[ctx->digestAlgo], DSI_SAFE_ALLOC);
+	digest = kmalloc (gDigestLength[ctx->digestAlgo], DIGSIG_SAFE_ALLOC);
 	if (!digest) {
-		DSM_ERROR ("kmalloc failed in dsi_sign_verify_final for digest\n");
+		DSM_ERROR ("kmalloc failed in %s for digest\n", __FUNCTION__);
 		return -ENOMEM;
 	}
 	/* TO DO: check the length of the signature: it should be equal to the length
 	   of the modulus */
-	if ((rc = dsi_sha1_final(ctx, digest)) < 0) {
+	if ((rc = digsig_sha1_final(ctx, digest)) < 0) {
 		DSM_ERROR
-		    ("dsi_sign_verify_final Cannot finalize hash algorithm\n");
+		    ("%s: Cannot finalize hash algorithm\n", __FUNCTION__);
 		kfree(ctx->tvmem);
 		kfree(ctx);
 		kfree (digest);
@@ -179,7 +179,7 @@ dsi_sign_verify_final(SIGCTX * ctx, char *sig, int siglen /* PublicKey */ ,
 
 	switch (ctx->digestAlgo) {
 	case SIGN_RSA:
-		rc = dsi_rsa_bsign_verify(digest,
+		rc = digsig_rsa_bsign_verify(digest,
 					  gDigestLength[ctx->digestAlgo],
 					  signed_hash);
 		break;
@@ -203,7 +203,7 @@ Description :
 Parameters  : 
 Return value: 
 ******************************************************************************/
-void dsi_sign_verify_free()
+void digsig_sign_verify_free()
 {
 	if (SHA1_TFM) {
 		crypto_free_tfm(SHA1_TFM);
@@ -220,7 +220,7 @@ Parameters  :
 Return value:
 ******************************************************************************/
 
-int dsi_init_pkey(const char read_par, unsigned char *raw_public_key, int mpi_size)
+int digsig_init_pkey(const char read_par, unsigned char *raw_public_key, int mpi_size)
 {
 	int nread;
 
@@ -229,13 +229,13 @@ int dsi_init_pkey(const char read_par, unsigned char *raw_public_key, int mpi_si
 	case 'n':
 		DSM_PRINT(DEBUG_SIGN, "Reading raw_public_key_n!\n");
 		nread = mpi_size;
-		dsi_public_key[0] =
+		digsig_public_key[0] =
 			mpi_read_from_buffer(raw_public_key, &nread, 0);
 		break;
 	case 'e':
 		DSM_PRINT(DEBUG_SIGN, "Reading raw_public_key_e!\n");
 		nread = mpi_size;
-		dsi_public_key[1] =
+		digsig_public_key[1] =
 			mpi_read_from_buffer(raw_public_key, &nread, 0);
 		break;
 	}
@@ -252,12 +252,12 @@ Return value: 0 - RSA signature is valid
               -1 - an error occured
 ******************************************************************************/
 
-int dsi_rsa_bsign_verify(unsigned char *hash_format, int length,
+int digsig_rsa_bsign_verify(unsigned char *hash_format, int length,
 			 unsigned char *signed_hash)
 {
 	int rc = 0;
 	MPI hash, data;
-	unsigned nread = DSI_ELF_SIG_SIZE;
+	unsigned nread = DIGSIG_ELF_SIG_SIZE;
 	int nframe;
 	unsigned char sig_class;
 	unsigned char sig_timestamp[SIZEOF_UNSIGNED_INT];
@@ -265,16 +265,16 @@ int dsi_rsa_bsign_verify(unsigned char *hash_format, int length,
 	SIGCTX *ctx = NULL;
 	unsigned char *new_sig;
 
-	new_sig = kmalloc (gDigestLength[HASH_SHA1], DSI_SAFE_ALLOC);
+	new_sig = kmalloc (gDigestLength[HASH_SHA1], DIGSIG_SAFE_ALLOC);
 	if (!new_sig) {
-		DSM_ERROR ("kmalloc failed in dsi_rsa_bsign_verify for new_sig\n");
+		DSM_ERROR ("kmalloc failed in %s for new_sig\n", __FUNCTION__);
 		return -ENOMEM;
 	}
 
 	/* Get MPI of signed data from .sig file/section */
-	nread = DSI_ELF_SIG_SIZE;
+	nread = DIGSIG_ELF_SIG_SIZE;
 
-	data = mpi_read_from_buffer(signed_hash + DSI_RSA_DATA_OFFSET, &nread,
+	data = mpi_read_from_buffer(signed_hash + DIGSIG_RSA_DATA_OFFSET, &nread,
 				    0);
 	if (!data)
 		return -EINVAL;
@@ -301,22 +301,22 @@ int dsi_rsa_bsign_verify(unsigned char *hash_format, int length,
 		return -ENOMEM;
 	}
 
-	dsi_sha1_init(ctx);
+	digsig_sha1_init(ctx);
 
-	sig_class = signed_hash[DSI_RSA_CLASS_OFFSET];
+	sig_class = signed_hash[DIGSIG_RSA_CLASS_OFFSET];
 	sig_class &= 0xff;
 
 	for (i = 0; i < SIZEOF_UNSIGNED_INT; i++) {
 		sig_timestamp[i] =
-		    signed_hash[DSI_RSA_TIMESTAMP_OFFSET + i] & 0xff;
+		    signed_hash[DIGSIG_RSA_TIMESTAMP_OFFSET + i] & 0xff;
 	}
 
-	dsi_sha1_update(ctx, DSI_BSIGN_STRING, DSI_BSIGN_GREET_SIZE);
-	dsi_sha1_update(ctx, hash_format, SHA1_DIGEST_LENGTH);
-	dsi_sha1_update(ctx, &sig_class, 1);
-	dsi_sha1_update(ctx, sig_timestamp, SIZEOF_UNSIGNED_INT);
+	digsig_sha1_update(ctx, DIGSIG_BSIGN_STRING, DIGSIG_BSIGN_GREET_SIZE);
+	digsig_sha1_update(ctx, hash_format, SHA1_DIGEST_LENGTH);
+	digsig_sha1_update(ctx, &sig_class, 1);
+	digsig_sha1_update(ctx, sig_timestamp, SIZEOF_UNSIGNED_INT);
 
-	if ((rc = dsi_sha1_final(ctx, new_sig)) < 0) {
+	if ((rc = digsig_sha1_final(ctx, new_sig)) < 0) {
 		DSM_ERROR
 		    ("internal_rsa_verify_final Cannot finalize hash algorithm\n");
 		mpi_free(data);
@@ -325,7 +325,7 @@ int dsi_rsa_bsign_verify(unsigned char *hash_format, int length,
 		return rc;
 	}
 
-	nframe = mpi_get_nbits(dsi_public_key[0]);
+	nframe = mpi_get_nbits(digsig_public_key[0]);
 	hash = do_encode_md(new_sig, nframe);
 
 	if (hash == MPI_NULL) {
@@ -333,7 +333,7 @@ int dsi_rsa_bsign_verify(unsigned char *hash_format, int length,
 	}
 
 	/* Do RSA verification */
-	rc = rsa_verify(hash, &data, dsi_public_key);
+	rc = rsa_verify(hash, &data, digsig_public_key);
 
 	mpi_free(hash);
 	mpi_free(data);
@@ -351,7 +351,7 @@ Parameters  :
 Return value: 0 for successful allocation, -1 for failed
 ******************************************************************************/
 
-static int dsi_sha1_init(SIGCTX * ctx)
+static int digsig_sha1_init(SIGCTX * ctx)
 {
 	if (ctx == NULL)
 		return -1;
@@ -375,7 +375,7 @@ Parameters  :
 Return value: void. 
 ******************************************************************************/
 
-static void dsi_sha1_update(SIGCTX * ctx, char *buf, int buflen)
+static void digsig_sha1_update(SIGCTX * ctx, char *buf, int buflen)
 {
 	char *plaintext;
 
@@ -395,7 +395,7 @@ Parameters  :
 Return value: 0 for successful allocation, -1 for failed
 ******************************************************************************/
 
-static int dsi_sha1_final(SIGCTX * ctx, char *digest)
+static int digsig_sha1_final(SIGCTX * ctx, char *digest)
 {
 	/* TO DO: check the length of the signature: it should be equal to the length
 	   of the modulus */

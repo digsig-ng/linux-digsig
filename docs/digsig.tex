@@ -160,12 +160,12 @@ denied. Consequently, if you forget to sign an essential binary such
 as /sbin/reboot, or /sbin/rmmod, you'll be most embarrassed to reboot
 the system if you have to...  Therefore, for testing purposes, we
 recommend you initially run DigSig in debug mode. To do this, compile
-DigSig with the DSI\_DIGSIG\_DEBUG and DSI\_DEBUG flags set in the
+DigSig with the DIGSIG\_DEBUG flag set in the
 Makefile:
 
 \small
 \begin{verbatim} 
-EXTRA_CFLAGS += -DDSI_DEBUG -DDSI_DIGSIG_DEBUG -I $(obj)
+EXTRA_CFLAGS += -DDIGSIG_DEBUG -I $(obj)
 \end{verbatim} 
 \normalsize
 
@@ -205,10 +205,10 @@ $./ps-test
 $ su
 Password:
 # tail -f /var/log/messages
-colby kernel: DSI-LSM MODULE - binary is ./ps-test
-colby kernel: DSI-LSM MODULE - dsi_bprm_compute_creds:
+colby kernel: DIGSIG MODULE - binary is ./ps-test
+colby kernel: DIGSIG MODULE - dsi_bprm_compute_creds:
                       Found signature section
-colby kernel: DSI-LSM MODULE - dsi_bprm_compute_creds:
+colby kernel: DIGSIG MODULE - dsi_bprm_compute_creds:
                       Signature verification successful
 \end{verbatim}
 \normalsize
@@ -218,8 +218,8 @@ But, corrupted executables won't run:
 \begin{verbatim} 
 $ ./ps-corrupt
 bash: ./ps-corrupt: Operation not permitted 
-colby kernel: DSI-LSM MODULE - binary is ./ps-corrupt
-colby kernel: DSI-LSM MODULE Error - dsi_bprm_compute_creds:
+colby kernel: DIGSIG MODULE - binary is ./ps-corrupt
+colby kernel: DIGSIG MODULE Error - dsi_bprm_compute_creds:
                       Signatures do not match for ./ps-corrupt
 \end{verbatim} 
 \normalsize
@@ -235,8 +235,8 @@ bash: ./ps: cannot execute binary file
 # su 
 Password: 
 # tail -f /var/log/messages
-colby kernel: DSI-LSM MODULE - binary is ./ps
-colby kernel: DSI-LSM MODULE - dsi_bprm_compute_creds:
+colby kernel: DIGSIG MODULE - binary is ./ps
+colby kernel: DIGSIG MODULE - dsi_bprm_compute_creds:
                       Signatures do not match
 \end{verbatim}
 \normalsize

@@ -31,17 +31,17 @@
 #endif
 
 
-/* DSM-DSI error types */
+/* DSM-DIGSIG error types */
 #define DSM_SUCCESS             1
 #define DSM_FAILURE             2
 
 
 #ifdef MODULE			/* This prevents user programs that include dsi.h to inherit kernel stuff */
 
-#define DSI_SAFE_ALLOC (in_interrupt () ? GFP_ATOMIC : GFP_KERNEL)
+#define DIGSIG_SAFE_ALLOC (in_interrupt () ? GFP_ATOMIC : GFP_KERNEL)
 
 /* This is a hack to avoid using va_lists */
-#define DSM_ERROR(fmt,arg...) printk(DSI_MODULE_NAME" Error - " fmt,##arg)
+#define DSM_ERROR(fmt,arg...) printk(DIGSIG_MODULE_NAME" Error - " fmt,##arg)
 
 
 #include "dsi_debug.h"		/* Include this file first since it contains DSM_PRINT macro */

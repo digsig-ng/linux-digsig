@@ -20,12 +20,12 @@
 #include <linux/fs.h>
 #include "gnupg/mpi/mpi.h"
 
-void dsi_init_revocation(void);
-void dsi_cleanup_revocation(void);
-#ifdef DSI_REVOCATION
-int dsi_is_revoked_sig(char *buffer);
+void digsig_init_revocation(void);
+void digsig_cleanup_revocation(void);
+#ifdef DIGSIG_REVOCATION
+int digsig_is_revoked_sig(char *buffer);
 #else
-#define dsi_is_revoked_sig(x) 0
+#define digsig_is_revoked_sig(x) 0
 #endif
 
 /*

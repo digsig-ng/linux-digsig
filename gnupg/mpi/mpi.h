@@ -34,11 +34,11 @@
 #include "types.h"
 #include "memory.h" 
 
-/* DSI defines */
+/* DIGSIG defines */
 
 #define SHA1_DIGEST_LENGTH   20
 
-/*end of DSI defines */
+/*end of DIGSIG defines */
 
 #define log_debug printk
 #define log_bug printk

@@ -22,9 +22,9 @@
 
 int is_cached_signature(struct inode *inode);
 void remove_signature(struct inode *inode);
-int dsi_purge_cache(int num);
-void dsi_cache_signature(struct inode *inode);
-int dsi_init_caching(void);
-void dsi_cache_cleanup(void);
+int digsig_purge_cache(int num);
+void digsig_cache_signature(struct inode *inode);
+int digsig_init_caching(void);
+void digsig_cache_cleanup(void);
 
 #endif

@@ -21,7 +21,7 @@
 #ifndef __DSI_DEBUG_H
 #define __DSI_DEBUG_H
 
-#define DSI_MODULE_NAME "DSI-LSM MODULE"
+#define DIGSIG_MODULE_NAME "DIGSIG MODULE"
 
 
 
@@ -54,24 +54,13 @@
 #define DEBUG_SIGN            0x02000000
 #define DEBUG_TIME            0x04000000
 
-extern int DSIDebugLevel;
-
-
-#ifdef DSI_DEBUG
+extern int DigsigDebugLevel;
 
 /* This is a hack to avoid using va_lists */
 #define DSM_PRINT(dbg,fmt,arg...) \
-    if (dbg & DSIDebugLevel) printk(DSI_MODULE_NAME" - " fmt,##arg)
-#else
-#define DSM_PRINT(dbt,fmt,arg...)
-
-#endif				/* DSI_DEBUG */
-
-#ifdef DSI_DEBUG
+    if (dbg & DigsigDebugLevel) printk(DIGSIG_MODULE_NAME" - " fmt,##arg)
 
 #define DSM_PRINT_NO_PREFIX(dbg,fmt,arg...) \
-    if (dbg & DSIDebugLevel) printk(fmt,##arg)
-
-#endif				/* DSI_DEBUG */
+    if (dbg & DigsigDebugLevel) printk(fmt,##arg)
 
 #endif				/* __DSI_DEBUG_H */

@@ -26,9 +26,9 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#define DSI_ELF_SIG_SIZE 512               /* this is a redefinition */
-#define DSI_PKEY_N_OFFSET        8         /* offset for pkey->n */
-#define DSI_MPI_MAX_SIZE_N 1024 
+#define DIGSIG_ELF_SIG_SIZE 512               /* this is a redefinition */
+#define DIGSIG_PKEY_N_OFFSET        8         /* offset for pkey->n */
+#define DIGSIG_MPI_MAX_SIZE_N 1024 
 /* pkey->e MPI follows pkey->n MPI */
 
 
@@ -59,7 +59,7 @@ int main(int argc, char **argv)
 		return -1;
 	}
   
-	key = (unsigned char *)malloc (DSI_MPI_MAX_SIZE_N+1);
+	key = (unsigned char *)malloc (DIGSIG_MPI_MAX_SIZE_N+1);
 	key[key_offset++] = 'n';
 	/*
 	 * Format of an MPI:
@@ -67,7 +67,7 @@ int main(int argc, char **argv)
 	 * - MPI
 	 */
 
-	lseek(pkey_file, DSI_PKEY_N_OFFSET, SEEK_SET);
+	lseek(pkey_file, DIGSIG_PKEY_N_OFFSET, SEEK_SET);
 	read(pkey_file, &c, 1);
 	key[key_offset++] = c;
 	len = c << 8;
@@ -77,7 +77,7 @@ int main(int argc, char **argv)
 	len |= c;
 	len = (len + 7) / 8;   /* round up */
 
-	if (len > DSI_ELF_SIG_SIZE) {
+	if (len > DIGSIG_ELF_SIG_SIZE) {
 		printf("\nLength of 'n' MPI is too large %#x\n", len);
 		return -1;
 	}
@@ -85,8 +85,8 @@ int main(int argc, char **argv)
 	for (i = 0; i < len; i++) {
 		read(pkey_file, &c, 1);
 		key[key_offset++] = c;
-		if (key_offset == DSI_MPI_MAX_SIZE_N+2) {
-			temp = (unsigned char *)malloc (DSI_MPI_MAX_SIZE_N*2+1);
+		if (key_offset == DIGSIG_MPI_MAX_SIZE_N+2) {
+			temp = (unsigned char *)malloc (DIGSIG_MPI_MAX_SIZE_N*2+1);
 			memcpy (temp, key, key_offset-1);
 			free (key);
 			key = temp;
@@ -115,7 +115,7 @@ int main(int argc, char **argv)
 	len |= c;
 	len = (len + 7) / 8;   /* round up */
 
-	if (len > DSI_ELF_SIG_SIZE) {
+	if (len > DIGSIG_ELF_SIG_SIZE) {
 		printf("\nLength of 'e' MPI is too large %#x\n", len);
 		return -1;
 	}

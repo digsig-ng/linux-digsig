@@ -37,10 +37,7 @@ To compile Digsig from the directory you installed Digsig do:
 
 You can set different compilation arguments in Makefile: 
 
--DDSI_DEBUG: This allows to print the debug messages to
-/var/log/messages.
-
--DDSI_DIGSIG_DEBUG: When this variable is set Digsig will run in
+-DDIGSIG_DEBUG: When this variable is set Digsig will run in
 debug mode.  In debug mode, DigSig lets unsigned binaries run. This
 state is ideal to test DigSig, and also list the binaries you need to
 sign to get a fully operational system.
@@ -58,7 +55,7 @@ MODULE PARAMETERS
 ===================
 
 Digsig currently accepts a single optional parameter.  If it is
-loaded with dsi_max_cached_sigs=<int>, then it will cache up to
+loaded with digsig_max_cached_sigs=<int>, then it will cache up to
 <int> signature validations.  The default value is 512.
 
 To enable this parameter using digsig.init, you would change the
@@ -66,7 +63,7 @@ module insertion line from
 
   /sbin/insmod -f ./digsig_verif.ko || exit 1
 to
-  /sbin/insmod -f ./digsig_verif.ko dsi_max_cached_sigs=1024 || exit 1
+  /sbin/insmod -f ./digsig_verif.ko digsig_max_cached_sigs=1024 || exit 1
 
 Requirements:
 ==============
@@ -190,7 +187,7 @@ Consult section 2 ("Usage") of the bsign README for helpful hints.
 From ./digsig, do make -C /usr/src/linux-2.5.66 SUBDIRS=$PWD modules. You need rw acess to /usr/src/linux-2.5.66. 
 
 CAREFULL: we advice you to compile the module in debug mode at your
-first tries (see -DDSI_DEBUG -DDSI_DIGSIG_DEBUG in the Makefile). In
+first tries (see -DDIGSIG_DEBUG in the Makefile). In
 this mode, the module verifies the signatures but does not enforce the
 security (if not any signature present in your binary, you'll have a
 message in /var/log/messages but the execution is not
@@ -218,10 +215,10 @@ $ps
 $./ps-test 
 
 $tail -f /var/log/messages 
-Sep 16 15:49:13 colby kernel: DSI-LSM MODULE - binary is /bin/ps
-Sep 16 15:49:16 colby kernel: DSI-LSM MODULE - binary is ./ps-makan
-Sep 16 15:49:16 colby kernel: DSI-LSM MODULE - dsi_bprm_compute_creds: Found signature section
-Sep 16 15:49:16 colby kernel: DSI-LSM MODULE - dsi_bprm_compute_creds: Signature verification successful
+Sep 16 15:49:13 colby kernel: DIGSIG MODULE - binary is /bin/ps
+Sep 16 15:49:16 colby kernel: DIGSIG MODULE - binary is ./ps-makan
+Sep 16 15:49:16 colby kernel: DIGSIG MODULE - dsi_bprm_compute_creds: Found signature section
+Sep 16 15:49:16 colby kernel: DIGSIG MODULE - dsi_bprm_compute_creds: Signature verification successful
 
 6) In restrictive mode, normal mode 
 

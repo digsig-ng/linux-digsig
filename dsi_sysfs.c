@@ -42,25 +42,25 @@
    For use with GnuPG, we should copy everything except the first byte
 */
 #ifdef DIGSIG_LTM
-#define DSI_KEY_OFFSET 3
+#define DIGSIG_KEY_OFFSET 3
 #else
-#define DSI_KEY_OFFSET 1
+#define DIGSIG_KEY_OFFSET 1
 #endif
 
 extern int g_init; /* digsig.c */
 extern long int total_jiffies; /* digsig.c */
-extern MPI dsi_public_key[2]; /* dsi_sig_verify.c */
+extern MPI digsig_public_key[2]; /* dsi_sig_verify.c */
 
-extern struct list_head dsi_revoked_sigs; /* dsi_cache.c */
+extern struct list_head digsig_revoked_sigs; /* dsi_cache.c */
 
-struct dsi_attribute  {
+struct digsig_attribute_st  {
 	struct attribute attr;
 	ssize_t (*show)(struct kobject *, struct attribute *attr, char *);
 	ssize_t (*store)(struct kobject *, struct attribute *attr, const char *, size_t);
 };
 
 /* from digsig_cache.c */
-extern struct list_head dsi_revoked_sigs;
+extern struct list_head digsig_revoked_sigs;
 
 /*
  * These are the show/hide prototypes and attribute for the
@@ -75,14 +75,14 @@ char digsig_file_name[] = "digsig_interface";
 /*
  * For the curious, notice what's going on:  We create a structure which
  * contains  .attr .  This  .attr  is what we pass into  sysfs_create_file
- * in  dsi_init_sysfs .  In turn, sysfs will pass this back to us for read and
+ * in  digsig_init_sysfs .  In turn, sysfs will pass this back to us for read and
  * write operations ( digsig_key_store  and  digsig_key_show  above).  We can
  * then get our  digsig_attribute  variable, which contains the  .attr  whose
  * address we are sent, back by calculating the offset of  .attr  and
  * subtracting that from the address we were sent, which is what container_of
  * in  digsig_store  and  digsig_show  (just a few definitions below) do.
  */
-static struct dsi_attribute digsig_attribute = {
+static struct digsig_attribute_st digsig_attribute = {
 	.attr = {.name = digsig_file_name,
 		 .owner = THIS_MODULE,
 		 .mode = S_IRUSR | S_IWUSR},
@@ -101,7 +101,7 @@ static ssize_t digsig_revoked_list_show (struct kobject *obj,
 static ssize_t digsig_revoked_list_store (struct kobject *obj,
 	struct attribute *attr, const char *buff, size_t count);
 char digsig_r_file_name[] = "digsig_revoke";
-static struct dsi_attribute digsig_r_attribute = {
+static struct digsig_attribute_st digsig_r_attribute = {
 	.attr = {.name = digsig_r_file_name,
 		 .owner = THIS_MODULE,
 		 .mode = S_IRUSR | S_IWUSR},
@@ -111,19 +111,19 @@ static struct dsi_attribute digsig_r_attribute = {
 
 /*
  * Next are the digsig sysfs file operations.  These are assigned to
- * the files under /sys/digsig.  They will use the dsi_attribute struct
- * defined above to find the function which should actually be called
- * for read/write.  The attr argument to these functions is a member of
- * the dsi_attribute struct we defined, so we use its offset to find our
- * structure, which in turn contains the read and write operations we
- * actually want to perform.
+ * the files under /sys/digsig.  They will use the digsig_attribute_st
+ * struct defined above to find the function which should actually be
+ * called for read/write.  The attr argument to these functions is a
+ * member of the digsig_attribute_st struct we defined, so we use its
+ * offset to find our structure, which in turn contains the read and
+ * write operations we actually want to perform.
  */
 static ssize_t
 digsig_store(struct kobject *kobj, struct attribute *attr, const char *buf,
 	size_t len)
 {
-	struct dsi_attribute *attribute = container_of(attr,
-		struct dsi_attribute, attr);
+	struct digsig_attribute_st *attribute = container_of(attr,
+		struct digsig_attribute_st, attr);
 
 	return attribute->store ? attribute->store(kobj, attr, buf, len) : 0;
 }
@@ -131,8 +131,8 @@ digsig_store(struct kobject *kobj, struct attribute *attr, const char *buf,
 static ssize_t
 digsig_show(struct kobject *kobj, struct attribute *attr, char *buf)
 {
-	struct dsi_attribute *attribute = container_of(attr,
-		struct dsi_attribute, attr);
+	struct digsig_attribute_st *attribute = container_of(attr,
+		struct digsig_attribute_st, attr);
 
 	return attribute->show ? attribute->show(kobj, attr, buf) : 0;
 }
@@ -161,7 +161,7 @@ static struct kobject digsig_kobject = {
 /*
  * init and cleanup functions for the /sys/digsig directory.
  */
-int dsi_init_sysfs(void)
+int digsig_init_sysfs(void)
 {
 	if (kobject_register (&digsig_kobject) != 0) {
 		DSM_ERROR ("Digsig key failed to register properly\n");
@@ -179,7 +179,7 @@ int dsi_init_sysfs(void)
 	return 0;
 }
 
-void dsi_cleanup_sysfs(void)
+void digsig_cleanup_sysfs(void)
 {
 	sysfs_remove_file (&digsig_kobject, &digsig_attribute.attr);
 	sysfs_remove_file (&digsig_kobject, &digsig_r_attribute.attr);
@@ -222,33 +222,33 @@ digsig_key_store (struct kobject *obj, struct attribute *attr, const char *buff,
 
 	case 'n':
 		raw_public_key =
-			(unsigned char *) kmalloc(count - DSI_KEY_OFFSET, DSI_SAFE_ALLOC);
+			(unsigned char *) kmalloc(count - DIGSIG_KEY_OFFSET, DIGSIG_SAFE_ALLOC);
 		if (!raw_public_key) {
-			DSM_ERROR("kmalloc fail for n in dsi_write\n");
+			DSM_ERROR("kmalloc fail for n in %s\n", __FUNCTION__);
 			return -ENOMEM;
 		}
-		memcpy(raw_public_key, &buff[DSI_KEY_OFFSET], count - DSI_KEY_OFFSET);
-		mpi_size = count - DSI_KEY_OFFSET;
+		memcpy(raw_public_key, &buff[DIGSIG_KEY_OFFSET], count - DIGSIG_KEY_OFFSET);
+		mpi_size = count - DIGSIG_KEY_OFFSET;
 		DSM_PRINT(DEBUG_DEV, "pkey->n size is %i\n", mpi_size);
 		break;
 	case 'e':
 		raw_public_key =
-			(unsigned char *) kmalloc(count - DSI_KEY_OFFSET, DSI_SAFE_ALLOC);
+			(unsigned char *) kmalloc(count - DIGSIG_KEY_OFFSET, DIGSIG_SAFE_ALLOC);
 		if (!raw_public_key) {
-			DSM_ERROR("kmalloc fail for e in dsi_write\n");
+			DSM_ERROR("kmalloc fail for e in %s\n", __FUNCTION__);
 			return -ENOMEM;
 		}
-		memcpy(raw_public_key, &buff[DSI_KEY_OFFSET], count - DSI_KEY_OFFSET);
-		mpi_size = count - DSI_KEY_OFFSET;
+		memcpy(raw_public_key, &buff[DIGSIG_KEY_OFFSET], count - DIGSIG_KEY_OFFSET);
+		mpi_size = count - DIGSIG_KEY_OFFSET;
 		DSM_PRINT(DEBUG_DEV, "pkey->e size is %i\n", mpi_size);
 		break;
 	default:
 		return -EINVAL;
 	}
 
-	dsi_init_pkey(buff[0], raw_public_key, mpi_size);
+	digsig_init_pkey(buff[0], raw_public_key, mpi_size);
 
-	if (dsi_public_key[0] && dsi_public_key[1]) {
+	if (digsig_public_key[0] && digsig_public_key[1]) {
 		g_init = 1;
 	}
 	kfree(raw_public_key);
@@ -271,14 +271,14 @@ static ssize_t
 digsig_revoked_list_store (struct kobject *obj, struct attribute *attr, const char *buff, size_t count)
 {
         struct revoked_sig *tmp;
-        int rcount = DSI_ELF_SIG_SIZE - DSI_BSIGN_INFOS - DSI_RSA_DATA_OFFSET;
+        int rcount = DIGSIG_ELF_SIG_SIZE - DIGSIG_BSIGN_INFOS - DIGSIG_RSA_DATA_OFFSET;
 
         if (g_init)
                 return -EPERM;
 
-        if (count != DSI_ELF_SIG_SIZE) {
+        if (count != DIGSIG_ELF_SIG_SIZE) {
                 DSM_ERROR("digsig_revoked_list_store: Oops - count=%d, "
-                          "sig size is %d\n", count, DSI_ELF_SIG_SIZE);
+                          "sig size is %d\n", count, DIGSIG_ELF_SIG_SIZE);
                 return -EINVAL;
         }
 
@@ -287,10 +287,10 @@ digsig_revoked_list_store (struct kobject *obj, struct attribute *attr, const ch
                 return -ENOMEM;
         memset(tmp, 0, sizeof(struct revoked_sig));
         tmp->sig = mpi_read_from_buffer(
-		buff + DSI_BSIGN_INFOS + DSI_RSA_DATA_OFFSET,
+		buff + DIGSIG_BSIGN_INFOS + DIGSIG_RSA_DATA_OFFSET,
 		&rcount, 0);
 
-        list_add_tail(&tmp->next, &dsi_revoked_sigs);
+        list_add_tail(&tmp->next, &digsig_revoked_sigs);
 
         DSM_PRINT(DEBUG_SIGN, "Added a revoked sig.\n");
         return count;

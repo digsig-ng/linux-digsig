@@ -25,7 +25,7 @@
 #include "digsig_cache.h"
 #include "dsi_sig_verify.h"
 
-#ifdef DSI_DIGSIG_DEBUG
+#ifdef DIGSIG_DEBUG
 #define DIGSIG_MODE 0		/*permissive  mode */
 #define DIGSIG_BENCH 1
 #else
@@ -33,9 +33,9 @@
 #define DIGSIG_BENCH 0
 #endif
 
-extern int DSIDebugLevel;
+extern int DigsigDebugLevel;
 
-extern int dsi_max_cached_sigs, dsi_num_cached_sigs;
+extern int digsig_max_cached_sigs, digsig_num_cached_sigs;
 extern int g_init;
 
 /*
@@ -45,11 +45,11 @@ extern int g_init;
  * are added to this cache.  Future loads of the file will not need to be
  * revalidated unless the file has been written to.
  *
- * We create an array of dsi_max_cached_sigs such structs.  On
+ * We create an array of digsig_max_cached_sigs such structs.  On
  * collisions, we simply allocate a new struct, and point existing
  * entry's ->next to the newly allocated struct.  This means we may
- * end up with more than dsi_max_cached_sigs structs allocated.  (But
- * we will only use dsi_max_cached_sigs of them).
+ * end up with more than digsig_max_cached_sigs structs allocated.  (But
+ * we will only use digsig_max_cached_sigs of them).
  */
 struct digsig_hash_table {
 	short orig;  /* did this come from the original array, or malloc'ed? */
@@ -84,7 +84,7 @@ Return value: Return the hash value.
 static inline int
 hash(struct inode *inode)
 {
-	return ((unsigned long)inode) % dsi_max_cached_sigs;
+	return ((unsigned long)inode) % digsig_max_cached_sigs;
 }
 
 /******************************************************************************
@@ -114,7 +114,7 @@ int is_cached_signature(struct inode *inode)
 {
 	struct digsig_hash_table *p;
 
-	if (!dsi_num_cached_sigs)
+	if (!digsig_num_cached_sigs)
 		return 0;
 
 	p = &sig_cache[hash(inode)];
@@ -141,7 +141,7 @@ void remove_signature(struct inode *inode)
 {
 	struct digsig_hash_table *p;
 
-	if (!dsi_num_cached_sigs)
+	if (!digsig_num_cached_sigs)
 		return;
 
 	spin_lock(&sig_cache_spinlock);
@@ -155,14 +155,14 @@ void remove_signature(struct inode *inode)
 				p->next->prev = p->prev;
 			list_del(&p->lru);
 			kfree(p);
-			dsi_num_cached_sigs--;
+			digsig_num_cached_sigs--;
 			goto out_unlock;
 		}
 		p->initialized = 0;
 		p->next = 0;
 		p->inode = NULL;
 		list_del_init(&p->lru);
-		dsi_num_cached_sigs--;
+		digsig_num_cached_sigs--;
 	}
 out_unlock:
 	spin_unlock(&sig_cache_spinlock);
@@ -171,18 +171,18 @@ out_unlock:
 
 /******************************************************************************
 Description : 
- * dsi_purge_cache(num): clear out num sig validations from the end of the
+ * digsig_purge_cache(num): clear out num sig validations from the end of the
  * lru list.  Must be called with sig_cache_spinlock held.  Returns the
  * number actually deleted.
 Parameters  : @num: number of cached sig validation entries to clear.
 Return value: number of entries actually deleted.
 ******************************************************************************/
-int dsi_purge_cache(int num)
+int digsig_purge_cache(int num)
 {			
 	int i=0;
 	struct digsig_hash_table *tmph, *del;
 
-	while (i < dsi_max_cached_sigs && i<num) {
+	while (i < digsig_max_cached_sigs && i<num) {
 		i++;
 		tmph = list_entry(sig_cache_lru.next,
 				struct digsig_hash_table, lru);
@@ -218,7 +218,7 @@ int dsi_purge_cache(int num)
 		tmph->inode = NULL;
 		list_del_init(&tmph->lru);
 	}
-	dsi_num_cached_sigs -= i;
+	digsig_num_cached_sigs -= i;
 
 	return i;
 }
@@ -258,13 +258,13 @@ alloc_digsig_hash(struct inode *inode, struct digsig_hash_table *next)
 /******************************************************************************
 Description : 
  * We've validated the signature on inode.  Cache that decision.
- * We only store dsi_max_cached_sigs decision.  If we're breaking that
+ * We only store digsig_max_cached_sigs decision.  If we're breaking that
  * number, then delete one third of the cached decisions at random.
 Parameters  : 
 	@inode: inode whose signature validation to cache
 Return value: none
 ******************************************************************************/
-void dsi_cache_signature(struct inode *inode)
+void digsig_cache_signature(struct inode *inode)
 {
 	int h;
 	struct digsig_hash_table *new;
@@ -273,8 +273,8 @@ void dsi_cache_signature(struct inode *inode)
 		return;
 
 	spin_lock(&sig_cache_spinlock);
-	if (dsi_num_cached_sigs >= dsi_max_cached_sigs) {
-	        if (!dsi_purge_cache(4)) {
+	if (digsig_num_cached_sigs >= digsig_max_cached_sigs) {
+	        if (!digsig_purge_cache(4)) {
 			DSM_PRINT(DEBUG_SIGN,
 				"%s: unable to clear cache entries\n",
 				__FUNCTION__);
@@ -290,7 +290,7 @@ void dsi_cache_signature(struct inode *inode)
 		sig_cache[h].i_sb = inode->i_sb;
 		sig_cache[h].initialized = 1;
 		sig_cache[h].next = NULL;
-		dsi_num_cached_sigs++;
+		digsig_num_cached_sigs++;
 		list_add_tail(&sig_cache[h].lru, &sig_cache_lru);
 		goto out_unlock;
 	}
@@ -302,7 +302,7 @@ void dsi_cache_signature(struct inode *inode)
 	sig_cache[h].next = new;
 	new->prev = &sig_cache[h];
 	list_add_tail(&new->lru, &sig_cache_lru);
-	dsi_num_cached_sigs++;
+	digsig_num_cached_sigs++;
 
 out_unlock:
 	spin_unlock(&sig_cache_spinlock);
@@ -313,11 +313,11 @@ Description : Initialize caching
 Parameters  : none
 Return value: 0 on success, 1 on failure.
 ******************************************************************************/
-int dsi_init_caching(void)
+int digsig_init_caching(void)
 {
         int tmp;
         
-	sig_cache = kmalloc(dsi_max_cached_sigs * 
+	sig_cache = kmalloc(digsig_max_cached_sigs * 
 				sizeof(struct digsig_hash_table), GFP_ATOMIC); 
 				/* GFP_KERNEL); */ 
 	
@@ -327,9 +327,9 @@ int dsi_init_caching(void)
 	}
 
 	memset(sig_cache, 0,
-		dsi_max_cached_sigs * sizeof(struct digsig_hash_table));
+		digsig_max_cached_sigs * sizeof(struct digsig_hash_table));
 
-	for (tmp=0; tmp<dsi_max_cached_sigs; tmp++) {
+	for (tmp=0; tmp<digsig_max_cached_sigs; tmp++) {
 		sig_cache[tmp].orig = 1;
 	}
 
@@ -342,8 +342,8 @@ int dsi_init_caching(void)
 /*
  * Called at digsig unload to clean up
  */
-void dsi_cache_cleanup(void)
+void digsig_cache_cleanup(void)
 {
-	dsi_purge_cache(dsi_num_cached_sigs);
+	digsig_purge_cache(digsig_num_cached_sigs);
 	kfree(sig_cache);
 }

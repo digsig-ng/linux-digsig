@@ -46,18 +46,12 @@
 #include "gnupg/mpi/mpi.h"
 #include "gnupg/cipher/rsa-verify.h"
 
-#ifdef DSI_DIGSIG_DEBUG
+#ifdef DIGSIG_DEBUG
 #define DIGSIG_MODE 0		/*permissive  mode */
 #define DIGSIG_BENCH 1
 #else
 #define DIGSIG_MODE -EPERM	/*restrictive mode */
 #define DIGSIG_BENCH 0
-#endif
-
-#ifdef MP_LOW_MEM
-#define TAB_SIZE 32
-#else
-#define TAB_SIZE 256
 #endif
 
 #define get_inode_security(ino) ((unsigned long)(ino->i_security))
@@ -66,12 +60,12 @@
 #define get_file_security(file) ((unsigned long)(file->f_security))
 #define set_file_security(file,val) (file->f_security = (void *)val)
 
-extern MPI dsi_public_key[2]; /* dsi_sig_verify.c */
+extern MPI digsig_public_key[2]; /* dsi_sig_verify.c */
 
 unsigned long int total_jiffies = 0;
 
 /* Allocate and free functions for each kind of security blob. */
-static struct semaphore dsi_digsig_sem;
+static struct semaphore digsig_sem;
 
 /* Indicate if module as key or not */
 int g_init = 0;
@@ -80,18 +74,18 @@ int g_init = 0;
 int secondary = 0;
 
 #ifdef DIGSIG_LOG
-int DSIDebugLevel = DEBUG_INIT | DEBUG_SIGN  ;
+int DigsigDebugLevel = DEBUG_INIT | DEBUG_SIGN;
 #else
-int DSIDebugLevel = DEBUG_INIT;
+int DigsigDebugLevel = DEBUG_INIT;
 #endif
 
 /* Maximum number of signature validations which will be cached */
-int dsi_max_cached_sigs = 512;
-module_param(dsi_max_cached_sigs, int, 0);
-MODULE_PARM_DESC(dsi_max_cached_sigs, "Number of signatures to keep cached\n");
+int digsig_max_cached_sigs = 512;
+module_param(digsig_max_cached_sigs, int, 0);
+MODULE_PARM_DESC(digsig_max_cached_sigs, "Number of signatures to keep cached\n");
 
 /* Number of signature validations cached so far */
-int dsi_num_cached_sigs = 0;
+int digsig_num_cached_sigs = 0;
 
 /******************************************************************************
 Description : 
@@ -111,7 +105,7 @@ Parameters  :
 Return value: 
 ******************************************************************************/
 static int
-dsi_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
+digsig_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
 {
 	if (!g_init)
 		return 0;
@@ -135,7 +129,7 @@ Parameters  :
 Return value: 
 ******************************************************************************/
 static int
-dsi_inode_unlink(struct inode *dir, struct dentry *dentry)
+digsig_inode_unlink(struct inode *dir, struct dentry *dentry)
 {
 	if (!g_init)
 		return 0;
@@ -147,15 +141,15 @@ dsi_inode_unlink(struct inode *dir, struct dentry *dentry)
 	return 0;
 }
 
-struct security_operations dsi_security_ops;
+struct security_operations digsig_security_ops;
 
-#define set_dsi_ops(ops, function)				\
+#define set_digsig_ops(ops, function)				\
 		if (!ops->function) {				\
-			ops->function = dsi_##function;		\
+			ops->function = digsig_##function;	\
                 }
 
 static int
-dsi_verify_signature(Elf32_Shdr * elf_shdata,
+digsig_verify_signature(Elf32_Shdr * elf_shdata,
 		     char *sig_orig, struct file *file, int sh_offset);
 
 
@@ -172,7 +166,7 @@ Return value: Upon suscess: buffer containing signature (size of signature is fi
               depending on algorithm used)
               Failure: null pointer 
 ******************************************************************************/
-static char *dsi_find_signature(struct elfhdr *elf_ex,
+static char *digsig_find_signature(struct elfhdr *elf_ex,
 				Elf32_Shdr * elf_shdata, struct file *file,
 				int *sh_offset)
 {
@@ -181,38 +175,38 @@ static char *dsi_find_signature(struct elfhdr *elf_ex,
 	char *buffer = NULL;
 
 	while (i < elf_ex->e_shnum
-	       && elf_shdata[i].sh_type != DSI_ELF_SIG_SECTION) {
+	       && elf_shdata[i].sh_type != DIGSIG_ELF_SIG_SECTION) {
 		i++;
 	}
 
 	if (i == elf_ex->e_shnum)
 		return NULL;
 
-	if (elf_shdata[i].sh_type == DSI_ELF_SIG_SECTION) {
+	if (elf_shdata[i].sh_type == DIGSIG_ELF_SIG_SECTION) {
 		DSM_PRINT(DEBUG_SIGN,
-			  "dsi_find_signature: Found signature section\n");
+			  "%s: Found signature section\n", __FUNCTION__);
 
-		/* Now get DSI_ELF_SIG_SIZE bytes of signature section */
+		/* Now get DIGSIG_ELF_SIG_SIZE bytes of signature section */
 
-		if (elf_shdata[i].sh_size != DSI_ELF_SIG_SIZE) {
+		if (elf_shdata[i].sh_size != DIGSIG_ELF_SIG_SIZE) {
 			DSM_PRINT(DEBUG_SIGN,
-				  "dsi_find_signature: Signature section is not %u bytes\n",
-				  DSI_ELF_SIG_SECTION);
+				  "%s: Signature section is not %u bytes\n",
+				  __FUNCTION__, DIGSIG_ELF_SIG_SECTION);
 			return NULL;
 		}
 
-		buffer = (char *) kmalloc(DSI_ELF_SIG_SIZE, DSI_SAFE_ALLOC);
+		buffer = (char *) kmalloc(DIGSIG_ELF_SIG_SIZE, DIGSIG_SAFE_ALLOC);
 		if (!buffer) {
-			DSM_ERROR ("kmalloc failed in dsi_find_signature for buffer.\n");
+			DSM_ERROR ("kmalloc failed in %s for buffer.\n", __FUNCTION__);
 			return NULL;
 		}
 
 		retval = kernel_read(file, elf_shdata[i].sh_offset,
-				     (char *) buffer, DSI_ELF_SIG_SIZE);
-		if ((retval < 0) || (retval != DSI_ELF_SIG_SIZE)) {
+				     (char *) buffer, DIGSIG_ELF_SIG_SIZE);
+		if ((retval < 0) || (retval != DIGSIG_ELF_SIG_SIZE)) {
 			DSM_PRINT(DEBUG_SIGN,
-				  "dsi_find_signature: Unable to read signature: %d\n",
-				  retval);
+				  "%s: Unable to read signature: %d\n",
+				  __FUNCTION__, retval);
 			kfree(buffer);
 			return NULL;
 		}
@@ -234,7 +228,7 @@ Parameters  :
 Return value: 0 for false or 1 for true or -1 for error
 ******************************************************************************/
 static int
-dsi_verify_signature(Elf32_Shdr * elf_shdata,
+digsig_verify_signature(Elf32_Shdr * elf_shdata,
 		     char *sig_orig, struct file *file, int sh_offset)
 {
 	char *sig_result, *read_blocks;
@@ -243,55 +237,55 @@ dsi_verify_signature(Elf32_Shdr * elf_shdata,
 	unsigned int lower, upper;
 	SIGCTX *ctx;
 
-	down (&dsi_digsig_sem);
-	if (dsi_is_revoked_sig(sig_orig)) {
-		DSM_ERROR("dsi_verify_signature: Refusing attempt to load an ELF"
-			"file with a revoked signature.\n");
-		up (&dsi_digsig_sem);
+	down (&digsig_sem);
+	if (digsig_is_revoked_sig(sig_orig)) {
+		DSM_ERROR("%s: Refusing attempt to load an ELF file with"
+			  " a revoked signature.\n", __FUNCTION__);
+		up (&digsig_sem);
 		return -EPERM;
 	}
 
-	if ((ctx = dsi_sign_verify_init(HASH_SHA1, SIGN_RSA)) == NULL) {
+	if ((ctx = digsig_sign_verify_init(HASH_SHA1, SIGN_RSA)) == NULL) {
 		DSM_PRINT(DEBUG_SIGN,
-			  "dsi_verify_signature Cannot allocate crypto context.\n");
-		up (&dsi_digsig_sem);
+			  "%s: Cannot allocate crypto context.\n", __FUNCTION__);
+		up (&digsig_sem);
 		return -ENOMEM;
 	}
 
-	sig_result = (char *) kmalloc(DSI_ELF_SIG_SIZE, DSI_SAFE_ALLOC);
+	sig_result = (char *) kmalloc(DIGSIG_ELF_SIG_SIZE, DIGSIG_SAFE_ALLOC);
 	if (!sig_result) {
-		DSM_ERROR ("kmalloc failed in dsi_verify_signature for sig_result.\n");
+		DSM_ERROR ("kmalloc failed in %s for sig_result.\n", __FUNCTION__);
 		kfree (ctx->tvmem);
 		kfree (ctx);
-		up (&dsi_digsig_sem);
+		up (&digsig_sem);
 		return -ENOMEM;
 	}
-	read_blocks = (char *) kmalloc(DSI_ELF_READ_BLOCK_SIZE, DSI_SAFE_ALLOC);
+	read_blocks = (char *) kmalloc(DIGSIG_ELF_READ_BLOCK_SIZE, DIGSIG_SAFE_ALLOC);
 	if (!read_blocks) {
-		DSM_ERROR ("kmalloc failed in dsi_verify_signature for read_block.\n");
+		DSM_ERROR ("kmalloc failed in %s for read_block.\n", __FUNCTION__);
 		kfree (ctx->tvmem);
 		kfree (ctx);
 		kfree (sig_result);
-		up (&dsi_digsig_sem);
+		up (&digsig_sem);
 		return -ENOMEM;
 	}
 
-	memset(sig_result, 0, DSI_ELF_SIG_SIZE);
+	memset(sig_result, 0, DIGSIG_ELF_SIG_SIZE);
 
 	for (offset = 0; offset < file->f_dentry->d_inode->i_size;
-	     offset += DSI_ELF_READ_BLOCK_SIZE) {
+	     offset += DIGSIG_ELF_READ_BLOCK_SIZE) {
 
 		size = kernel_read(file, offset, (char *) read_blocks,
-				   DSI_ELF_READ_BLOCK_SIZE);
+				   DIGSIG_ELF_READ_BLOCK_SIZE);
 		if (size <= 0) {
 			DSM_PRINT(DEBUG_SIGN,
-				  "dsi_verify_signature: Unable to read signature in blocks: %d\n",
-				  size);
+				  "%s: Unable to read signature in blocks: %d\n",
+				  __FUNCTION__, size);
 			kfree(sig_result);
 			kfree(read_blocks);
 			kfree(ctx->tvmem);
 			kfree(ctx);
-			up (&dsi_digsig_sem);
+			up (&digsig_sem);
 			return -1;
 		}
 
@@ -300,46 +294,46 @@ dsi_verify_signature(Elf32_Shdr * elf_shdata,
 		   that the parts of the signature read are set to 0 */ 
 		/* Must zero out signature section to match bsign mechanism */
 		lower = sh_offset;	/* lower bound of memset */
-		upper = sh_offset + DSI_ELF_SIG_SIZE;	/* upper bound */
+		upper = sh_offset + DIGSIG_ELF_SIG_SIZE;	/* upper bound */
 
-		if ((lower < offset + DSI_ELF_READ_BLOCK_SIZE) &&
+		if ((lower < offset + DIGSIG_ELF_READ_BLOCK_SIZE) &&
 		    (offset < upper)) {
 			lower = (offset > lower) ? offset : lower;
-			upper =	(offset + DSI_ELF_READ_BLOCK_SIZE <
+			upper =	(offset + DIGSIG_ELF_READ_BLOCK_SIZE <
 				 upper) ? offset +
-				DSI_ELF_READ_BLOCK_SIZE : upper;
+				DIGSIG_ELF_READ_BLOCK_SIZE : upper;
 
 			memset(read_blocks + (lower - offset), 0,
 			       upper - lower);
 		}
 
 		/* continue verification loop */
-		if (dsi_sign_verify_update(ctx, read_blocks, size) != 0) {
+		if (digsig_sign_verify_update(ctx, read_blocks, size) != 0) {
 			DSM_PRINT(DEBUG_SIGN,
-				  "dsi_verify_signature Error updating crypto verification\n");
+				  "%s: Error updating crypto verification\n", __FUNCTION__);
 			kfree(sig_result);
 			kfree(read_blocks);
 			kfree(ctx->tvmem);
 			kfree(ctx);
-			up (&dsi_digsig_sem);
+			up (&digsig_sem);
 			return -1;
 		}
 	}
 
 	/* A bit of bsign formatting else hashes won't match, works with bsign v0.4.4 */
-	if ((retval = dsi_sign_verify_final(ctx, sig_result, DSI_ELF_SIG_SIZE,
-					    sig_orig + DSI_BSIGN_INFOS)) < 0) {
+	if ((retval = digsig_sign_verify_final(ctx, sig_result, DIGSIG_ELF_SIG_SIZE,
+					    sig_orig + DIGSIG_BSIGN_INFOS)) < 0) {
 		DSM_PRINT(DEBUG_SIGN,
-			  "dsi_verify_signature Error calculating final crypto verification\n");
+			  "%s: Error calculating final crypto verification\n", __FUNCTION__);
 		kfree(sig_result);
 		kfree(read_blocks);
-		up (&dsi_digsig_sem);
+		up (&digsig_sem);
 		return -1;
 	}
 
 	kfree(sig_result);
 	kfree(read_blocks);
-	up (&dsi_digsig_sem);
+	up (&digsig_sem);
 	return retval;
 }
 
@@ -352,7 +346,7 @@ dsi_verify_signature(Elf32_Shdr * elf_shdata,
  * is the *number* of processes which have this file mmapped(PROT_EXEC),
  * so it can be >1.
  */
-static int dsi_deny_write_access(struct file *file)
+static int digsig_deny_write_access(struct file *file)
 {
 	struct inode *inode = file->f_dentry->d_inode;
 	unsigned long isec;
@@ -374,7 +368,7 @@ static int dsi_deny_write_access(struct file *file)
  * decrement our writer count on the inode.  When it hits 0, we will
  * again allow opening the inode for writing.
  */
-static void dsi_allow_write_access(struct file *file)
+static void digsig_allow_write_access(struct file *file)
 {
 	struct inode *inode = file->f_dentry->d_inode;
 	unsigned long isec = get_inode_security(inode);
@@ -388,10 +382,10 @@ static void dsi_allow_write_access(struct file *file)
  * file->f_security>0, and we decrement the inode usage count to
  * show that we are done with it.
  */
-void dsi_file_free_security(struct file *file)
+void digsig_file_free_security(struct file *file)
 {
 	if (file->f_security) {
-		dsi_allow_write_access(file);
+		digsig_allow_write_access(file);
 	}
 }
 
@@ -433,7 +427,7 @@ static inline struct elfhdr *read_elf_header(struct file *file)
 	struct elfhdr *elf_ex;
 
 	elf_ex =
-	    (struct elfhdr *)kmalloc(sizeof(struct elfhdr), DSI_SAFE_ALLOC);
+	    (struct elfhdr *)kmalloc(sizeof(struct elfhdr), DIGSIG_SAFE_ALLOC);
 	if (!elf_ex) {
 		DSM_ERROR ("%s: kmalloc failed for elf_ex\n", __FUNCTION__);
 		return NULL;
@@ -455,7 +449,7 @@ read_section_header(struct file *file, int sh_size, int sh_off)
 	Elf32_Shdr *elf_shdata;
 	int retval;
 	
-	elf_shdata = (Elf32_Shdr *) kmalloc(sh_size, DSI_SAFE_ALLOC);
+	elf_shdata = (Elf32_Shdr *) kmalloc(sh_size, DIGSIG_SAFE_ALLOC);
 	if (!elf_shdata) {
 		DSM_ERROR("%s: Cannot allocate memory to read Section Header\n",
 			  __FUNCTION__);
@@ -499,7 +493,7 @@ static inline int is_unprotected_file(struct file *file)
 			__FUNCTION__, file->f_dentry->d_name.name, exec_time); \
 	}
 	
-int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
+int digsig_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 {
 	struct elfhdr *elf_ex;
 	int retval, sh_offset;
@@ -537,7 +531,7 @@ int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 	 */
 	if (get_file_security(file) == 0) {
 		allow_write_on_exit = 1;
-		retval = dsi_deny_write_access(file); 
+		retval = digsig_deny_write_access(file); 
 		if (retval)
 			return retval;
 	}
@@ -564,7 +558,7 @@ int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 		goto out_with_file;
 
 	/* Find signature section */
-	sig_orig = dsi_find_signature(elf_ex, elf_shdata, file, &sh_offset);
+	sig_orig = digsig_find_signature(elf_ex, elf_shdata, file, &sh_offset);
 	if (sig_orig == NULL) {
 		DSM_ERROR("%s: Signature not found for the binary: %s !\n", 
 			  __FUNCTION__, file->f_dentry->d_name.name);
@@ -572,12 +566,12 @@ int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 	}
 
 	/* Verify binary's signature */
-	retval = dsi_verify_signature (elf_shdata, sig_orig, file, sh_offset);
+	retval = digsig_verify_signature (elf_shdata, sig_orig, file, sh_offset);
 
 	if (!retval) {
 		DSM_PRINT(DEBUG_SIGN,
 			  "%s: Signature verification successful\n", __FUNCTION__);
-		dsi_cache_signature(file->f_dentry->d_inode);
+		digsig_cache_signature(file->f_dentry->d_inode);
 		allow_write_on_exit = 0;
 	} else if (retval > 0) {
 		DSM_ERROR("%s: Signature do not match for %s\n",
@@ -598,7 +592,7 @@ int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 	kfree (elf_ex);
  out_file_no_buf:
  	if (allow_write_on_exit) {
-		dsi_allow_write_access(file);
+		digsig_allow_write_access(file);
 		file->f_security = NULL;
 	}
 
@@ -609,10 +603,10 @@ int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 
 void security_set_operations(struct security_operations *ops)
 {
-	set_dsi_ops (ops, file_mmap);
-	set_dsi_ops (ops, file_free_security);
-	set_dsi_ops(ops, inode_permission);
-	set_dsi_ops(ops, inode_unlink);
+	set_digsig_ops(ops, file_mmap);
+	set_digsig_ops(ops, file_free_security);
+	set_digsig_ops(ops, inode_permission);
+	set_digsig_ops(ops, inode_unlink);
 }
 
 static int __init digsig_init_module(void)
@@ -621,29 +615,29 @@ static int __init digsig_init_module(void)
 
 	/* initialize caching mechanisms */ 
 
-	if (dsi_init_caching()){
+	if (digsig_init_caching()){
 	  return -ENOMEM;
 	}
-	dsi_init_revocation();
+	digsig_init_revocation();
 
-	/* initialize DSI's hooks */
-	security_set_operations(&dsi_security_ops);
+	/* initialize DigSig's hooks */
+	security_set_operations(&digsig_security_ops);
 
 	/* register */
-	if (register_security (&dsi_security_ops)) {
-		DSM_ERROR ("< disig_init_module(): Failure registering DigSig as primairy security module\n");
-		if (mod_reg_security ("digsig_verif", &dsi_security_ops)) {
-			DSM_ERROR ("< digsig_init_module(): Failure registering DigSig as secondary module\n");
+	if (register_security (&digsig_security_ops)) {
+		DSM_ERROR ("%s: Failure registering DigSig as primairy security module\n", __FUNCTION__);
+		if (mod_reg_security ("digsig_verif", &digsig_security_ops)) {
+			DSM_ERROR ("%s: Failure registering DigSig as secondary module\n", __FUNCTION__);
 			return -EINVAL;
 		}
 		DSM_PRINT (DEBUG_INIT, "Registered as secondary module\n");
 		secondary = 1;
 	}
 
-	init_MUTEX (&dsi_digsig_sem);
+	init_MUTEX (&digsig_sem);
 
-	if (dsi_init_sysfs()) {
-		DSM_ERROR("Error setting up sysfs for dsi\n");
+	if (digsig_init_sysfs()) {
+		DSM_ERROR("Error setting up sysfs for DigSig\n");
 		return -EINVAL;
 	}
 
@@ -654,19 +648,19 @@ static void __exit digsig_exit_module(void)
 {
 	DSM_PRINT (DEBUG_INIT, "Deinitializing module\n");
 	g_init = 0;
-	dsi_sign_verify_free ();
-	dsi_cleanup_sysfs ();
-	dsi_cleanup_revocation ();
-	dsi_cache_cleanup ();
-	mpi_free(dsi_public_key[0]);
-	mpi_free(dsi_public_key[1]);
+	digsig_sign_verify_free ();
+	digsig_cleanup_sysfs ();
+	digsig_cleanup_revocation ();
+	digsig_cache_cleanup ();
+	mpi_free(digsig_public_key[0]);
+	mpi_free(digsig_public_key[1]);
 	if (secondary) {
 		DSM_PRINT (DEBUG_INIT, "Attempting to unregister from primary module\n");
-		if (mod_unreg_security ("digsig_verif", &dsi_security_ops)) {
+		if (mod_unreg_security ("digsig_verif", &digsig_security_ops)) {
 		DSM_ERROR (KERN_INFO "Failure unregistering DigSig with primary module\n");
 		}
 	} else {
-		if (unregister_security (&dsi_security_ops)) {
+		if (unregister_security (&digsig_security_ops)) {
 		DSM_ERROR (KERN_INFO "Failure unregistering DigSig with the kernel\n");
 		}
 	}
@@ -678,5 +672,5 @@ module_exit(digsig_exit_module);
 /* see linux/module.h */
 MODULE_LICENSE("GPL");
 MODULE_DESCRIPTION("Distributed Security Infrastructure Module");
-MODULE_AUTHOR("DSI Team sourceforge.net/projects/disec");
-MODULE_SUPPORTED_DEVICE("DSI_module");
+MODULE_AUTHOR("DIGSIG Team sourceforge.net/projects/disec");
+MODULE_SUPPORTED_DEVICE("DIGSIG_module");

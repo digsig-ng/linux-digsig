@@ -40,7 +40,7 @@ digsig_verif-objs += dsi_sig_verify_ltm.o dsi_pkcs1.o dsi_ltm_rsa.o \
 	ltm/bn_mp_cnt_lsb.o ltm/bn_error.o \
 	ltm/bn_mp_init_multi.o ltm/bn_mp_clear_multi.o ltm/bn_mp_dr_reduce.o \
 	ltm/bn_mp_toradix.o ltm/bn_mp_radix_smap.o
-EXTRA_CFLAGS += -DDSI_DEBUG -DDSI_DIGSIG_DEBUG -DDIGSIG_LOG -DDIGSIG_LTM -DDSI_REVOCATION -I $(obj)/ltm -I $(obj)
+EXTRA_CFLAGS += -DDIGSIG_DEBUG -DDIGSIG_LOG -DDIGSIG_LTM -DDIGSIG_REVOCATION -I $(obj)/ltm -I $(obj)
 else
 digsig_verif-objs += dsi_sig_verify.o ./gnupg/mpi/generic/mpih-lshift.o \
 	./gnupg/mpi/generic/mpih-mul1.o ./gnupg/mpi/generic/mpih-mul2.o \
@@ -51,7 +51,7 @@ digsig_verif-objs += dsi_sig_verify.o ./gnupg/mpi/generic/mpih-lshift.o \
 	./gnupg/mpi/mpih-cmp.o ./gnupg/mpi/mpih-div.o ./gnupg/mpi/mpih-mul.o ./gnupg/mpi/mpi-inline.o \
 	./gnupg/mpi/mpi-inv.o ./gnupg/mpi/mpi-mpow.o ./gnupg/mpi/mpi-mul.o ./gnupg/mpi/mpi-pow.o \
 	./gnupg/mpi/mpi-scan.o ./gnupg/mpi/mpiutil.o ./gnupg/cipher/rsa-verify.o
-EXTRA_CFLAGS += -DDSI_DEBUG -DDSI_DIGSIG_DEBUG -DDIGSIG_LOG -DDSI_REVOCATION
+EXTRA_CFLAGS += -DDIGSIG_DEBUG -DDIGSIG_LOG -DDIGSIG_REVOCATION
 endif
 clean:
 	@find . \

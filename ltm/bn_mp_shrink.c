@@ -27,7 +27,7 @@ int mp_shrink(mp_int * a)
 
 		tmp =
 		    (mp_digit *) kmalloc(sizeof(mp_digit) * a->used,
-					 DSI_SAFE_ALLOC);
+					 DIGSIG_SAFE_ALLOC);
 		if (tmp == NULL)
 			return MP_MEM;
 

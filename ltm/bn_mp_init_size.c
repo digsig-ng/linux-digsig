@@ -29,7 +29,7 @@ int mp_init_size(mp_int * a, int size)
 
 	/* alloc mem */
 	a->dp =
-	    (mp_digit *) kmalloc(sizeof(mp_digit) * size, DSI_SAFE_ALLOC);
+	    (mp_digit *) kmalloc(sizeof(mp_digit) * size, DIGSIG_SAFE_ALLOC);
 
 	/* AxL: a->dp = OPT_CAST calloc (sizeof (mp_digit), size); */
 	if (a->dp == NULL) {

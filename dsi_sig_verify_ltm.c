@@ -29,7 +29,7 @@
 #include "dsi_ltm_rsa.h"
 
 
-extern int DSIDebugLevel;
+extern int DigsigDebugLevel;
 mp_int dsi_public_key[2];
 
 /******************************************************************************
@@ -45,8 +45,8 @@ int gDigestLength[] = { /* SHA-1 */ 0x14 };
 static struct crypto_tfm *SHA1_TFM = NULL;
 
 #define TVMEMSIZE	          4096
-#define DSI_MODULUS_INDEX         0
-#define DSI_PUBLIC_EXPONENT_INDEX 1
+#define DIGSIG_MODULUS_INDEX         0
+#define DIGSIG_PUBLIC_EXPONENT_INDEX 1
 
 /*
  * When using MPIs (GnuPG) format of MPIs are :
@@ -172,7 +172,7 @@ dsi_sign_verify_final(SIGCTX * ctx, char *sig, int siglen /* PublicKey */ ,
 	char *digest;
 	int rc = -1;
 
-	digest = kmalloc (gDigestLength[ctx->digestAlgo], DSI_SAFE_ALLOC);
+	digest = kmalloc (gDigestLength[ctx->digestAlgo], DIGSIG_SAFE_ALLOC);
 	if (!digest) {
 		DSM_ERROR ("kmalloc failed in dsi_sign_verify_final for digest\n");
 		return -ENOMEM;
@@ -250,7 +250,7 @@ int dsi_init_pkey(const char read_par)
 		DSM_PRINT(DEBUG_SIGN,
 			  "Reading raw_public_key_n (%d bytes)!\n",
 			  dsi_mpi_size_n);
-		mp_read_unsigned_bin(&dsi_public_key[DSI_MODULUS_INDEX],
+		mp_read_unsigned_bin(&dsi_public_key[DIGSIG_MODULUS_INDEX],
 				     raw_public_key_n, dsi_mpi_size_n);
 		break;
 	case 'e':
@@ -258,7 +258,7 @@ int dsi_init_pkey(const char read_par)
 			  "Reading raw_public_key_e (%d bytes)!\n",
 			  dsi_mpi_size_e);
 		mp_read_unsigned_bin(&dsi_public_key
-				     [DSI_PUBLIC_EXPONENT_INDEX],
+				     [DIGSIG_PUBLIC_EXPONENT_INDEX],
 				     raw_public_key_e, dsi_mpi_size_e);
 		break;
 	}
@@ -284,7 +284,7 @@ dsi_rsa_bsign_verify(unsigned char *hash_format, int length,
 {
 	int rc = 0;
 	mp_int hash, data;
-	unsigned nread = DSI_ELF_SIG_SIZE;
+	unsigned nread = DIGSIG_ELF_SIG_SIZE;
 	int nframe;
 	unsigned char sig_class;
 	unsigned char sig_timestamp[SIZEOF_UNSIGNED_INT];
@@ -297,7 +297,7 @@ dsi_rsa_bsign_verify(unsigned char *hash_format, int length,
 	mp_init(&hash);
 	mp_init(&data);
 
-	new_sig = kmalloc (gDigestLength[HASH_SHA1], DSI_SAFE_ALLOC);
+	new_sig = kmalloc (gDigestLength[HASH_SHA1], DIGSIG_SAFE_ALLOC);
 	if (!new_sig) {
 		DSM_ERROR ("kmalloc failed in dsi_rsa_bsign_verify for new_sig\n");
 		return -ENOMEM;
@@ -306,17 +306,17 @@ dsi_rsa_bsign_verify(unsigned char *hash_format, int length,
 	   As MPIs (GnuPG) start with their length in bits (2 bytes), we retrieve first
 	   the length of the MPI, and then read the content
 	 */
-	nread = *(signed_hash + DSI_RSA_DATA_OFFSET) << 8;
-	nread |= *(signed_hash + DSI_RSA_DATA_OFFSET + 1);
+	nread = *(signed_hash + DIGSIG_RSA_DATA_OFFSET) << 8;
+	nread |= *(signed_hash + DIGSIG_RSA_DATA_OFFSET + 1);
 	nread = (nread + 7) / 8;	/* round up operation */
 
-	if (nread < 0 || nread > DSI_ELF_SIG_SIZE) {
+	if (nread < 0 || nread > DIGSIG_ELF_SIG_SIZE) {
 		DSM_ERROR
 		    ("dsi_rsa_bsign_verify(): cannot retrieve signed data size: nread=%d\n",
 		     nread);
 		DSM_PRINT(DEBUG_SIGN, "Length: %x %x\n",
-			  *(signed_hash + DSI_RSA_DATA_OFFSET),
-			  *(signed_hash + DSI_RSA_DATA_OFFSET + 1));
+			  *(signed_hash + DIGSIG_RSA_DATA_OFFSET),
+			  *(signed_hash + DIGSIG_RSA_DATA_OFFSET + 1));
 		kfree (new_sig);
 		return -1;
 	}
@@ -325,7 +325,7 @@ dsi_rsa_bsign_verify(unsigned char *hash_format, int length,
 		  "reading signed data from signed binary (%d bytes)\n",
 		  nread);
 	if (mp_read_unsigned_bin
-	    (&data, signed_hash + DSI_RSA_DATA_OFFSET + 2,
+	    (&data, signed_hash + DIGSIG_RSA_DATA_OFFSET + 2,
 	     nread) != MP_OKAY) {
 		DSM_ERROR
 		    ("dsi_rsa_bsign_verify(): cannot read signed data\n");
@@ -345,16 +345,16 @@ dsi_rsa_bsign_verify(unsigned char *hash_format, int length,
 		return -1;
 	}
 
-	sig_class = signed_hash[DSI_RSA_CLASS_OFFSET];
+	sig_class = signed_hash[DIGSIG_RSA_CLASS_OFFSET];
 	sig_class &= 0xff;
 
 	for (i = 0; i < SIZEOF_UNSIGNED_INT; i++) {
 		sig_timestamp[i] =
-		    signed_hash[DSI_RSA_TIMESTAMP_OFFSET + i] & 0xff;
+		    signed_hash[DIGSIG_RSA_TIMESTAMP_OFFSET + i] & 0xff;
 	}
 
-	dsi_sign_verify_update(ctx, DSI_BSIGN_STRING,
-			       DSI_BSIGN_GREET_SIZE);
+	dsi_sign_verify_update(ctx, DIGSIG_BSIGN_STRING,
+			       DIGSIG_BSIGN_GREET_SIZE);
 	dsi_sign_verify_update(ctx, hash_format, SHA1_DIGEST_LENGTH);
 	dsi_sign_verify_update(ctx, &sig_class, 1);
 	dsi_sign_verify_update(ctx, sig_timestamp, SIZEOF_UNSIGNED_INT);
@@ -386,8 +386,8 @@ dsi_rsa_bsign_verify(unsigned char *hash_format, int length,
 	/* Do RSA verification */
 	DSM_PRINT(DEBUG_SIGN, "Verifying the signature\n");
 	rc = dsi_ltm_rsa_verify(&hash, &data,
-				&dsi_public_key[DSI_PUBLIC_EXPONENT_INDEX],
-				&dsi_public_key[DSI_MODULUS_INDEX]);
+				&dsi_public_key[DIGSIG_PUBLIC_EXPONENT_INDEX],
+				&dsi_public_key[DIGSIG_MODULUS_INDEX]);
 
 	mp_clear(&hash);
 	mp_clear(&data);
