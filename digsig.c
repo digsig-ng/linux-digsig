@@ -525,8 +525,10 @@ static int digsig_file_mmap(struct file * file, unsigned long prot, unsigned lon
 	if (get_file_security(file) == 0) {
 		allow_write_on_exit = 1;
 		retval = digsig_deny_write_access(file); 
-		if (retval)
+		if (retval) {
 			die_if_elf = retval;
+			allow_write_on_exit = 0;
+		}
 	}
 
 	retval = 0;
