@@ -222,7 +222,7 @@ mpi_resize( MPI a, unsigned nlimbs )
 	a->d = m_debug_alloc_clear( nlimbs * sizeof(mpi_limb_t), info );
   #else
     if( a->d )
-	a->d = m_realloc(a->d, nlimbs * sizeof(mpi_limb_t) );
+	a->d = m_realloc(a->d, nlimbs * sizeof(mpi_limb_t), a->alloced );
     else
 	a->d = m_alloc_clear( nlimbs * sizeof(mpi_limb_t) );
   #endif

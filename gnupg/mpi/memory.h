@@ -34,15 +34,15 @@
 #define m_is_secure(n)          1
 
 /* &&&& realloc kernel hack, should check this */
-#define m_realloc(n,m)		krealloc((n),(m))
+#define m_realloc(n,m,o)	krealloc((n),(m),(o))
 
 static inline void *
-krealloc(void *ptr, size_t size)
+krealloc(void *ptr, size_t size, int to_copy)
 {
   void *tmp = NULL;
   if (size) {
     tmp = kmalloc(size,GFP_KERNEL);
-    if (ptr) memcpy(tmp,ptr,size);
+    if (ptr) memcpy(tmp,ptr,to_copy);
   }
   kfree(ptr);
   return tmp;
