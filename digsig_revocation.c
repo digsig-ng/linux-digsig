@@ -86,7 +86,7 @@ int dsi_is_revoked_sig(char *buffer)
 	}
 
 out:
-	m_free(file_sig);
+	mpi_free(file_sig);
 	return ret;
 }
 #endif

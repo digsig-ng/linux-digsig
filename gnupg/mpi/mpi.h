@@ -116,7 +116,7 @@ void mpi_swap( MPI a, MPI b);
 
 /*-- mpicoder.c --*/
 MPI do_encode_md(const byte *sha_buffer, unsigned nbits);
-MPI mpi_read_from_buffer(byte *buffer, unsigned *ret_nread, int secure);
+MPI mpi_read_from_buffer(const byte *buffer, unsigned *ret_nread, int secure);
 int mpi_fromstr(MPI val, const char *str);
 u32 mpi_get_keyid( MPI a, u32 *keyid );
 byte *mpi_get_buffer( MPI a, unsigned *nbytes, int *sign );

@@ -167,9 +167,6 @@ static char *dsi_find_signature(struct elfhdr *elf_ex,
 	int retval;
 	char *buffer = NULL;
 
-	i = 0;
-
-
 	while (i < elf_ex->e_shnum
 	       && elf_shdata[i].sh_type != DSI_ELF_SIG_SECTION) {
 		i++;
@@ -230,14 +227,14 @@ dsi_verify_signature(Elf32_Shdr * elf_shdata,
 	unsigned int lower, upper;
 	SIGCTX *ctx;
 
+	down (&dsi_digsig_sem);
 	if (dsi_is_revoked_sig(sig_orig)) {
-		DSM_ERROR("dsi_find_signature: Refusing attempt to load an ELF"
+		DSM_ERROR("dsi_verify_signature: Refusing attempt to load an ELF"
 			"file with a revoked signature.\n");
 		up (&dsi_digsig_sem);
 		return -EPERM;
 	}
 
-	down (&dsi_digsig_sem);
 	if ((ctx = dsi_sign_verify_init(HASH_SHA1, SIGN_RSA)) == NULL) {
 		DSM_PRINT(DEBUG_SIGN,
 			  "dsi_verify_signature Cannot allocate crypto context.\n");
@@ -246,14 +243,19 @@ dsi_verify_signature(Elf32_Shdr * elf_shdata,
 	}
 
 	sig_result = (char *) kmalloc(DSI_ELF_SIG_SIZE, DSI_SAFE_ALLOC);
-	read_blocks = (char *) kmalloc(DSI_ELF_READ_BLOCK_SIZE, DSI_SAFE_ALLOC);
 	if (!sig_result) {
 		DSM_ERROR ("kmalloc failed in dsi_verify_signature for sig_result.\n");
+		kfree (ctx->tvmem);
+		kfree (ctx);
 		up (&dsi_digsig_sem);
 		return -ENOMEM;
 	}
+	read_blocks = (char *) kmalloc(DSI_ELF_READ_BLOCK_SIZE, DSI_SAFE_ALLOC);
 	if (!read_blocks) {
 		DSM_ERROR ("kmalloc failed in dsi_verify_signature for read_block.\n");
+		kfree (ctx->tvmem);
+		kfree (ctx);
+		kfree (sig_result);
 		up (&dsi_digsig_sem);
 		return -ENOMEM;
 	}
@@ -271,6 +273,8 @@ dsi_verify_signature(Elf32_Shdr * elf_shdata,
 				  size);
 			kfree(sig_result);
 			kfree(read_blocks);
+			kfree(ctx->tvmem);
+			kfree(ctx);
 			up (&dsi_digsig_sem);
 			return -1;
 		}
@@ -299,6 +303,8 @@ dsi_verify_signature(Elf32_Shdr * elf_shdata,
 				  "dsi_verify_signature Error updating crypto verification\n");
 			kfree(sig_result);
 			kfree(read_blocks);
+			kfree(ctx->tvmem);
+			kfree(ctx);
 			up (&dsi_digsig_sem);
 			return -1;
 		}
@@ -323,7 +329,7 @@ dsi_verify_signature(Elf32_Shdr * elf_shdata,
 #ifndef DSI_EXEC_ONLY
 int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 {
-	struct elfhdr elf_ex;
+	struct elfhdr *elf_ex;
 	int retval, sh_offset;
 	unsigned int size;
 	Elf32_Shdr *elf_shdata;
@@ -343,12 +349,6 @@ int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 	if (!file->f_dentry->d_name.name)
 		return 0;
 
-	buf = kmalloc (BINPRM_BUF_SIZE, DSI_SAFE_ALLOC);
-	if (!buf) {
-		DSM_ERROR ("kmalloc failed in dsi_file_mmap for buf\n");
-		return 0;
-	}
-
 	if (DIGSIG_BENCH)	/* measure exec time only on DEBUG mode. */
 		exec_time = jiffies;
 
@@ -357,14 +357,20 @@ int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 	if (is_cached_signature(file->f_dentry->d_inode)) {
 		DSM_PRINT(DEBUG_SIGN, "Binary %s had a cached signature validation.\n", file->f_dentry->d_name.name);
 		retval = 0;
-		goto out_file;
+		goto out_file_no_buf;
+	}
+
+	buf = kmalloc (BINPRM_BUF_SIZE, DSI_SAFE_ALLOC);
+	if (!buf) {
+		DSM_ERROR ("kmalloc failed in dsi_file_mmap for buf\n");
+		return 0;
 	}
 
 	/* Get the exec-header, the original bprm->buf is no longer reliable at this point */
 	kernel_read(file, 0, buf, BINPRM_BUF_SIZE);
-	elf_ex = *((struct elfhdr *) buf);
+	elf_ex = (struct elfhdr *) buf;
 
-	if (memcmp(elf_ex.e_ident, ELFMAG, SELFMAG) != 0) {
+	if (memcmp(elf_ex->e_ident, ELFMAG, SELFMAG) != 0) {
 		DSM_PRINT(DEBUG_SIGN,
 			  "dsi_file_mmap: Binary is not elf format\n");
 		retval = 0;
@@ -375,32 +381,32 @@ int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 		goto out_file;
 	}
 
-	if (elf_ex.e_type != ET_EXEC && elf_ex.e_type != ET_DYN) {
+	if (elf_ex->e_type != ET_EXEC && elf_ex->e_type != ET_DYN) {
 		DSM_PRINT(DEBUG_SIGN, "dsi_file_mmap: Binary is not executable\n");
 		retval = 0;	/* ToDO: Makan, we decide to let go the not executable binaries. */
 		goto out_file;
 	}
 
 	/* Now read in all of the section header entries */
-	if (!elf_ex.e_shoff) {
+	if (!elf_ex->e_shoff) {
 		DSM_ERROR("dsi_file_mmap: No section header!\n");
 		retval = DIGSIG_MODE;
 		goto out_file;
 	}
 
-	if (elf_ex.e_shentsize != sizeof(Elf32_Shdr)) {
+	if (elf_ex->e_shentsize != sizeof(Elf32_Shdr)) {
 		DSM_ERROR ("dsi_file_mmap: Section header is wrong size!\n");
 		retval = DIGSIG_MODE;
 		goto out_file;
 	}
 
-	if (elf_ex.e_shnum > 65536U / sizeof(Elf32_Shdr)) {
+	if (elf_ex->e_shnum > 65536U / sizeof(Elf32_Shdr)) {
 		DSM_ERROR ("dsi_file_mmap: Too many entries in Section Header!\n");
 		retval = DIGSIG_MODE;
 		goto out_file;
 	}
 
-	size = elf_ex.e_shnum * sizeof(Elf32_Shdr);
+	size = elf_ex->e_shnum * sizeof(Elf32_Shdr);
 
 	elf_shdata = (Elf32_Shdr *) kmalloc(size, DSI_SAFE_ALLOC);
 	if (!elf_shdata) {
@@ -409,7 +415,7 @@ int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 		goto out_file;
 	}
 
-	retval = kernel_read (file, elf_ex.e_shoff, (char *) elf_shdata, size);
+	retval = kernel_read (file, elf_ex->e_shoff, (char *) elf_shdata, size);
 
 	if (retval < 0 || retval != size) {
 		DSM_ERROR ("dsi_file_mmap: Unable to read binary %s: %d\n",
@@ -420,11 +426,12 @@ int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 	}
 
 	/* Find signature section */
-	if ((sig_orig = dsi_find_signature (&elf_ex, elf_shdata, file,
+	if ((sig_orig = dsi_find_signature (elf_ex, elf_shdata, file,
 					    &sh_offset)) == NULL) {
 		retval = DIGSIG_MODE;
 		DSM_PRINT(DEBUG_SIGN,"dsi_file_mmap: Signature not found for the binary: %s !\n", 
 			  file->f_dentry->d_name.name);
+		kfree (elf_shdata);
 		goto out_file;
 	}
 
@@ -437,6 +444,7 @@ int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 		if (!strcmp (file->f_dentry->d_inode->i_sb->s_type->name, "nfs")) {
 			DSM_PRINT (DEBUG_SIGN, "File on NFS : no caching\n");
 			kfree (sig_orig);
+			kfree (elf_shdata);
 			goto out_file;
 		}
 		dsi_cache_signature(file->f_dentry->d_inode);
@@ -450,15 +458,17 @@ int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 		retval = -EPERM;
 	}
 
-	kfree(sig_orig);
+	kfree (sig_orig);
+	kfree (elf_shdata);
 
  out_file:
+	kfree (buf);
+ out_file_no_buf:
 	if (DIGSIG_BENCH) {	/* measure exec time only on DEBUG mode. */
 		exec_time = jiffies - exec_time;
 		total_jiffies += exec_time;
 		DSM_PRINT(DEBUG_TIME, "Time to execute dsi_file_mmap on %s is %li\n", file->f_dentry->d_name.name, exec_time);
 	}
-	kfree (buf);
 	return retval;
 
 }
@@ -586,6 +596,7 @@ int dsi_bprm_check_security(struct linux_binprm *bprm)
 	if ((sig_orig = dsi_find_signature(&elf_ex, elf_shdata, file,
 					   &sh_offset)) == NULL) {
 		retval = DIGSIG_MODE;
+		kfree (elf_shdata);
 		goto out_file;
 	}
 
@@ -598,6 +609,7 @@ int dsi_bprm_check_security(struct linux_binprm *bprm)
 		if (!strcmp (file->f_dentry->d_inode->i_sb->s_type->name, "nfs")) {
 			DSM_PRINT (DEBUG_SIGN, "File on NFS : no caching\n");
 			kfree (sig_orig);
+			kfree (elf_shdata);
 			goto out_file;
 		}
 		dsi_cache_signature(file->f_dentry->d_inode);
@@ -612,6 +624,7 @@ int dsi_bprm_check_security(struct linux_binprm *bprm)
 	}
 
 	kfree(sig_orig);
+	kfree (elf_shdata);
 
  out_file:
 	filp_close(file, 0);

@@ -169,11 +169,15 @@ dsi_sign_verify_final(SIGCTX * ctx, char *sig, int siglen /* PublicKey */ ,
 	if ((rc = dsi_sha1_final(ctx, digest)) < 0) {
 		DSM_ERROR
 		    ("dsi_sign_verify_final Cannot finalize hash algorithm\n");
+		kfree(ctx->tvmem);
+		kfree(ctx);
 		kfree (digest);
 		return rc;
 	}
 
 	if (siglen < gDigestLength[ctx->digestAlgo]) {
+		kfree(ctx->tvmem);
+		kfree(ctx);
 		kfree (digest);
 		return -2;
 	}
@@ -289,6 +293,7 @@ int dsi_rsa_bsign_verify(unsigned char *hash_format, int length,
 	ctx = (SIGCTX *) kmalloc(sizeof(SIGCTX), GFP_KERNEL);
 	if (ctx == NULL) {
 		DSM_ERROR("Cannot allocate ctx\n");
+		mpi_free (data);
 		kfree (new_sig);
 		return -ENOMEM;
 	}
@@ -296,6 +301,7 @@ int dsi_rsa_bsign_verify(unsigned char *hash_format, int length,
 	ctx->tvmem = kmalloc(TVMEMSIZE, GFP_KERNEL);
 	if (ctx->tvmem == NULL) {
 		kfree (ctx);
+		mpi_free(data);
 		kfree (new_sig);
 		DSM_ERROR("Cannot allocate plaintext buffer\n");
 		return -ENOMEM;
@@ -311,11 +317,6 @@ int dsi_rsa_bsign_verify(unsigned char *hash_format, int length,
 		    signed_hash[DSI_RSA_TIMESTAMP_OFFSET + i] & 0xff;
 	}
 
-	if (ctx == NULL) {
-		kfree (new_sig);
-		return -1;
-	}
-
 	dsi_sha1_update(ctx, DSI_BSIGN_STRING, DSI_BSIGN_GREET_SIZE);
 	dsi_sha1_update(ctx, hash_format, SHA1_DIGEST_LENGTH);
 	dsi_sha1_update(ctx, &sig_class, 1);
@@ -324,7 +325,9 @@ int dsi_rsa_bsign_verify(unsigned char *hash_format, int length,
 	if ((rc = dsi_sha1_final(ctx, new_sig)) < 0) {
 		DSM_ERROR
 		    ("internal_rsa_verify_final Cannot finalize hash algorithm\n");
-		kfree (new_sig);
+		mpi_free(data);
+		kfree(ctx->tvmem);
+		kfree(ctx);
 		return rc;
 	}
 
@@ -338,8 +341,10 @@ int dsi_rsa_bsign_verify(unsigned char *hash_format, int length,
 	/* Do RSA verification */
 	rc = rsa_verify(hash, &data, dsi_public_key);
 
-	m_free(hash);
-	m_free(data);
+	mpi_free(hash);
+	mpi_free(data);
+	kfree(ctx->tvmem);
+	kfree(ctx);
 	kfree (new_sig);
 	return rc;
 }

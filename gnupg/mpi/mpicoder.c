@@ -86,7 +86,7 @@ do_encode_md(const byte *sha_buffer, unsigned nbits)
 
 
 MPI
-mpi_read_from_buffer(byte *buffer, unsigned *ret_nread, int secure)
+mpi_read_from_buffer(const byte *buffer, unsigned *ret_nread, int secure)
 {
   int i, j;
   unsigned nbits, nbytes, nlimbs, nread=0;
