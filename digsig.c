@@ -299,6 +299,7 @@ digsig_verify_signature(Elf32_Shdr * elf_shdata,
 	if (retval != 0) {
 		DSM_PRINT(DEBUG_SIGN,
 			  "%s: Error calculating final crypto verification\n", __FUNCTION__);
+	        retval = -EPERM;
 		goto out;
 	}
 
