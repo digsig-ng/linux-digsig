@@ -114,9 +114,6 @@ int is_cached_signature(struct inode *inode)
 {
 	struct digsig_hash_table *p;
 
-	if (!g_init)
-		return 0;
-
 	if (!dsi_num_cached_sigs)
 		return 0;
 

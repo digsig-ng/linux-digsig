@@ -70,6 +70,9 @@ static struct semaphore dsi_digsig_sem;
 /* Indicate if module as key or not */
 int g_init = 0;
 
+/* Keep track of how we are registered */
+int secondary = 0;
+
 #ifdef DIGSIG_LOG
 int DSIDebugLevel = DEBUG_INIT | DEBUG_SIGN  ;
 #else
@@ -121,6 +124,9 @@ Return value:
 static int
 dsi_inode_unlink(struct inode *dir, struct dentry *dentry)
 {
+	if (!g_init)
+		return 0;
+
 	if (!is_cached_signature(dentry->d_inode))
 		return 0;
 
@@ -325,17 +331,16 @@ int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 	long exec_time = 0;
 	char *buf;
 
-	if (!file)
+	if (!g_init)
 		return 0;
 
+	if (!file)
+		return 0;
 	if (!(prot & VM_EXEC))
 		return 0;
 	if (!file->f_dentry)
 		return 0;
 	if (!file->f_dentry->d_name.name)
-		return 0;
-
-	if (!g_init)
 		return 0;
 
 	buf = kmalloc (BINPRM_BUF_SIZE, DSI_SAFE_ALLOC);
@@ -624,8 +629,6 @@ void security_set_operations(struct security_operations *ops)
 
 static int __init digsig_init_module(void)
 {
-	int err = 0;
-
 	DSM_PRINT(DEBUG_INIT, "Initializing module\n");
 
 	/* initialize caching mechanisms */ 
@@ -639,16 +642,21 @@ static int __init digsig_init_module(void)
 	security_set_operations(&dsi_security_ops);
 
 	/* register */
-	if ((err = register_security(&dsi_security_ops))) {
-		DSM_ERROR ("< dsi_init_module():Wrong security parameter\n");
-		return err;
+	if (register_security (&dsi_security_ops)) {
+		DSM_ERROR ("< disig_init_module(): Failure registering DigSig as primairy security module\n");
+		if (mod_reg_security ("digsig_verif", &dsi_security_ops)) {
+			DSM_ERROR ("< digsig_init_module(): Failure registering DigSig as secondary module\n");
+			return -EINVAL;
+		}
+		DSM_PRINT (DEBUG_INIT, "Registered as secondary module\n");
+		secondary = 1;
 	}
 
 	init_MUTEX (&dsi_digsig_sem);
 
-	if ((err = dsi_init_sysfs()) != 0) {
+	if (dsi_init_sysfs()) {
 		DSM_ERROR("Error setting up sysfs for dsi\n");
-		return err;
+		return -EINVAL;
 	}
 
 	return 0;
@@ -656,12 +664,22 @@ static int __init digsig_init_module(void)
 
 static void __exit digsig_exit_module(void)
 {
-	DSM_PRINT(DEBUG_INIT, "Deinitializing module\n");
-	dsi_sign_verify_free();
-	unregister_security(&dsi_security_ops);
-	dsi_cleanup_sysfs();
-	dsi_cleanup_revocation();
-	dsi_cache_cleanup();
+	DSM_PRINT (DEBUG_INIT, "Deinitializing module\n");
+	g_init = 0;
+	dsi_sign_verify_free ();
+	dsi_cleanup_sysfs ();
+	dsi_cleanup_revocation ();
+	dsi_cache_cleanup ();
+	if (secondary) {
+		DSM_PRINT (DEBUG_INIT, "Attempting to unregister from primary module\n");
+		if (mod_unreg_security ("digsig_verif", &dsi_security_ops)) {
+		DSM_ERROR (KERN_INFO "Failure unregistering DigSig with primary module\n");
+		}
+	} else {
+		if (unregister_security (&dsi_security_ops)) {
+		DSM_ERROR (KERN_INFO "Failure unregistering DigSig with the kernel\n");
+		}
+	}
 }
 
 module_init(digsig_init_module);

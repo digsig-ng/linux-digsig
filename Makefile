@@ -51,7 +51,7 @@ digsig_verif-objs += dsi_sig_verify.o ./gnupg/mpi/generic/mpih-lshift.o \
 	./gnupg/mpi/mpih-cmp.o ./gnupg/mpi/mpih-div.o ./gnupg/mpi/mpih-mul.o ./gnupg/mpi/mpi-inline.o \
 	./gnupg/mpi/mpi-inv.o ./gnupg/mpi/mpi-mpow.o ./gnupg/mpi/mpi-mul.o ./gnupg/mpi/mpi-pow.o \
 	./gnupg/mpi/mpi-scan.o ./gnupg/mpi/mpiutil.o ./gnupg/cipher/rsa-verify.o
-EXTRA_CFLAGS += -DDSI_DEBUG -DDSI_DIGSIG_DEBUG -DDSI_EXEC_ONLY -DDIGSIG_LOG -DDSI_REVOCATION
+EXTRA_CFLAGS += -DDSI_DEBUG -DDSI_DIGSIG_DEBUG -DDIGSIG_LOG -DDSI_REVOCATION
 endif
 clean:
 	@find . \
