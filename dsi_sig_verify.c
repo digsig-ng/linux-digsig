@@ -11,7 +11,8 @@
  *      (at your option) any later version.
  *
  * Authors: Axelle Apvrille
- *          David Gordon
+ *          David Gordon Aug 2003 
+ * modifs:  Makan Pourzandi Sep 2003 
  */
 
 #include <linux/string.h>
@@ -24,6 +25,7 @@
 #include "gnupg/cipher/rsa-verify.h"
 #include "dsi_sig_verify.h"
 
+#include "dsi_extract_mpi.h" 
 
 /*
  * Public key format: 2 MPIs
@@ -34,15 +36,7 @@
  */
 
 unsigned char raw_public_key_n[] = {
-  0x04, 0x00, 0xAC, 0x2F,  0x50, 0xF1, 0x96, 0x77,
-  0x74, 0xE6, 0x04, 0x0B, 0x98, 0xCB, 0x18, 0xC6, 0xE6, 0xE5, 0xE5, 0x37, 0x2E, 0x62, 0x5A, 0xBE,
-  0x35, 0x4A, 0xD7, 0x07, 0x59, 0xBF, 0xAF, 0x92, 0xB5, 0x1B, 0x45, 0xE7, 0x62, 0x58, 0xD2, 0xF4,
-  0x5A, 0xD5, 0xBC, 0xC3, 0xC5, 0x59, 0x80, 0x06, 0xFC, 0xD5, 0xA9, 0xAF, 0xFB, 0xC0, 0x95, 0xE9,
-  0x75, 0x99, 0x64, 0xDA, 0x37, 0x72, 0xC7, 0x95, 0xBA, 0x00, 0xB4, 0xBF, 0x11, 0x54, 0xF0, 0x76,
-  0x2A, 0x32, 0x60, 0x2A, 0x72, 0xFF, 0x1E, 0x81, 0x87, 0x38, 0x25, 0x6A, 0xC0, 0x71, 0xFE, 0x57,
-  0x31, 0xE0, 0x9C, 0x0B, 0xA0, 0xB7, 0xD0, 0xEA, 0x71, 0xBC, 0x7A, 0xA5, 0xED, 0xBC, 0xB8, 0x31,
-  0x04, 0x9A, 0x96, 0x98, 0xA9, 0xBA, 0xE6, 0x21, 0xC6, 0x7C, 0x4D, 0x22, 0xBF, 0xB0, 0xC5, 0x78,
-  0x93, 0x11, 0xA8, 0xD5, 0x38, 0x43, 0x34, 0xD7, 0x6E, 0x95};
+  0x4, 0, 0xb7, 0xee, 0x6c, 0x26, 0xf0, 0, 0xa4, 0xbc, 0xe6, 0x10, 0xba, 0xe8, 0xdd, 0x7f, 0xf7, 0xaa, 0x53, 0x63, 0x55, 0x67, 0x76, 0x91, 0x5b, 0xfa, 0xa9, 0x14, 0x34, 0xba, 0, 0xad, 0xb3, 0x6b, 0xf2, 0x71, 0x65, 0x9f, 0xf3, 0x44, 0x6e, 0x33, 0x25, 0xec, 0xdd, 0x1a, 0x95, 0xa6, 0x83, 0x2a, 0x99, 0xd7, 0xf6, 0x98, 0x5b, 0x2f, 0xe6, 0xae, 0xbd, 0x83, 0xf, 0x21, 0xd, 0x5f, 0xa8, 0xe5, 0xab, 0x9, 0xf3, 0x27, 0x71, 0xac, 0x29, 0xf4, 0x44, 0x9e, 0xbb, 0x7a, 0x40, 0x58, 0xd4, 0xda, 0xf5, 0xd3, 0x87, 0xaa, 0xef, 0xc, 0x3f, 0x58, 0x11, 0x21, 0x25, 0x76, 0x65, 0x7b, 0xef, 0x4, 0x60, 0x14, 0xcf, 0xaa, 0xfc, 0x4f, 0xd4, 0x5c, 0xe0, 0x94, 0x73, 0x2a, 0xd0, 0x1e, 0x8, 0xa4, 0x7a, 0x95, 0xc4, 0xaf, 0x64, 0x5a, 0xb7, 0xf8, 0xf7, 0xd, 0xb0, 0x5c, 0x1b, 0x2, 0x54, 0x9f}; 
 
 unsigned char raw_public_key_e[] = {0x00, 0x06, 0x29};
 
@@ -61,16 +55,16 @@ static MPI dsi_public_key[2];
 ******************************************************************************/
 
 static int
-internal_rsa_bsign_verify(unsigned char *sha_cat, int length, unsigned char *signed_hash);
+dsi_rsa_bsign_verify(unsigned char *sha_cat, int length, unsigned char *signed_hash);
 
 static int 
-internal_sha1_init(SIGCTX *ctx);
+dsi_sha1_init(SIGCTX *ctx);
 
 static void 
-internal_sha1_update(SIGCTX *ctx, char *buf, int buflen);
+dsi_sha1_update(SIGCTX *ctx, char *buf, int buflen);
 
 static int
-internal_sha1_final(SIGCTX *ctx, char *digest);
+dsi_sha1_final(SIGCTX *ctx, char *digest);
 
 
 /******************************************************************************
@@ -111,7 +105,7 @@ SIGCTX *dsi_sign_verify_init(int hashalgo, int signalgo)
   /* checking hash algorithm is known */
   switch (hashalgo) {
   case HASH_SHA1:
-    if (internal_sha1_init(ctx)) {
+    if (dsi_sha1_init(ctx)) {
       DSM_ERROR("Initializing SHA1 failed\n");
       kfree(ctx->tvmem);
       kfree(ctx);
@@ -156,7 +150,7 @@ dsi_sign_verify_update(SIGCTX *ctx, char *buf, int buflen)
     if (ctx == NULL)
       return -1;
 
-    internal_sha1_update(ctx, buf, buflen);
+    dsi_sha1_update(ctx, buf, buflen);
     break;
   default:
     DSM_ERROR("dsi_sign_verify_update Unknown hash algo\n");
@@ -180,7 +174,7 @@ dsi_sign_verify_final(SIGCTX *ctx, char *sig, int siglen /* PublicKey */, unsign
   /* TO DO: check the length of the signature: it should be equal to the length
      of the modulus */
 
-  if ((rc = internal_sha1_final(ctx, digest)) < 0) {
+  if ((rc = dsi_sha1_final(ctx, digest)) < 0) {
     DSM_ERROR("dsi_sign_verify_final Cannot finalize hash algorithm\n");
     return rc;
   }
@@ -191,7 +185,7 @@ dsi_sign_verify_final(SIGCTX *ctx, char *sig, int siglen /* PublicKey */, unsign
 
   switch (ctx->digestAlgo) {
   case SIGN_RSA:
-    rc = internal_rsa_bsign_verify(digest, gDigestLength[ctx->digestAlgo], signed_hash);
+    rc = dsi_rsa_bsign_verify(digest, gDigestLength[ctx->digestAlgo], signed_hash);
     break;
   default:
     DSM_ERROR("Unsupported cipher algorithm in binary digital signature verification\n");
@@ -230,9 +224,23 @@ Return value:
 ******************************************************************************/
 
 void
+/* TODO: makan: dsi_init_pkey(char *pkey_file) */ 
 dsi_init_pkey()
 {
   int nread;
+  
+  /* TODO: makan: 
+  if (!pkey_file){
+    DSM_ERROR("Can not initialize the public key for digsig_verif module!"); 
+    return; 
+  }
+  
+  if ( !dsi_get_pkey(raw_public_key_n, raw_public_key_e, pkey_file) ){
+    DSM_ERROR("Can not read the public key for digsig_verif module!"); 
+    return; 
+  }
+  */ 
+
 
   nread = DSI_ELF_SIG_SIZE;
   dsi_public_key[0] = mpi_read_from_buffer(raw_public_key_n, &nread, 0);
@@ -250,7 +258,7 @@ Return value: 0 - RSA signature is valid
               -1 - an error occured
 ******************************************************************************/
 
-int internal_rsa_bsign_verify(unsigned char *hash_format, int length, unsigned char *signed_hash)
+int dsi_rsa_bsign_verify(unsigned char *hash_format, int length, unsigned char *signed_hash)
 {
   int rc = 0;
   MPI hash, data;
@@ -292,7 +300,7 @@ int internal_rsa_bsign_verify(unsigned char *hash_format, int length, unsigned c
     return -1;
   }
 
-  internal_sha1_init(ctx);
+  dsi_sha1_init(ctx);
 
   sig_class = signed_hash[DSI_RSA_CLASS_OFFSET];
   sig_class &= 0xff;
@@ -304,12 +312,12 @@ int internal_rsa_bsign_verify(unsigned char *hash_format, int length, unsigned c
   if (ctx == NULL)
     return -1;
 
-  internal_sha1_update(ctx, DSI_BSIGN_STRING, DSI_BSIGN_GREET_SIZE);
-  internal_sha1_update(ctx, hash_format, SHA1_DIGEST_LENGTH);
-  internal_sha1_update(ctx, &sig_class, 1);
-  internal_sha1_update(ctx, sig_timestamp, SIZEOF_UNSIGNED_INT);
+  dsi_sha1_update(ctx, DSI_BSIGN_STRING, DSI_BSIGN_GREET_SIZE);
+  dsi_sha1_update(ctx, hash_format, SHA1_DIGEST_LENGTH);
+  dsi_sha1_update(ctx, &sig_class, 1);
+  dsi_sha1_update(ctx, sig_timestamp, SIZEOF_UNSIGNED_INT);
 
-  if ((rc = internal_sha1_final(ctx, new_sig)) < 0) {
+  if ((rc = dsi_sha1_final(ctx, new_sig)) < 0) {
     DSM_ERROR("internal_rsa_verify_final Cannot finalize hash algorithm\n");
     return rc;
   }
@@ -339,7 +347,7 @@ Return value: 0 for successful allocation, -1 for failed
 ******************************************************************************/
 
 static int 
-internal_sha1_init(SIGCTX *ctx)
+dsi_sha1_init(SIGCTX *ctx)
 {
   if (ctx == NULL)
     return -1;
@@ -358,13 +366,13 @@ internal_sha1_init(SIGCTX *ctx)
 
 
 /******************************************************************************
-Description : 
+Description : Portability layer function. 
 Parameters  : 
-Return value:
+Return value: void. 
 ******************************************************************************/
 
 static void 
-internal_sha1_update(SIGCTX *ctx, char *buf, int buflen)
+dsi_sha1_update(SIGCTX *ctx, char *buf, int buflen)
 {
   char *plaintext;
 
@@ -379,13 +387,13 @@ internal_sha1_update(SIGCTX *ctx, char *buf, int buflen)
 }
 
 /******************************************************************************
-Description : 
+Description : Portability layer function. 
 Parameters  : 
-Return value:
+Return value: 0 for successful allocation, -1 for failed
 ******************************************************************************/
 
 static int
-internal_sha1_final(SIGCTX *ctx, char *digest)
+dsi_sha1_final(SIGCTX *ctx, char *digest)
 {
   /* TO DO: check the length of the signature: it should be equal to the length
      of the modulus */

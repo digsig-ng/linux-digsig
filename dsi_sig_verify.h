@@ -77,6 +77,9 @@ SIGCTX *dsi_sign_verify_init(int hashalgo, int signalgo);
 int dsi_sign_verify_update(SIGCTX *ctx, char *buf, int buflen);
 int dsi_sign_verify_final(SIGCTX *ctx, char *sig, int siglen /* PublicKey */, unsigned char *signed_hash );
 void dsi_sign_verify_free(void);
-void dsi_init_pkey(void);
+
+void dsi_init_pkey();
+
+/* TODO: makan: void dsi_init_pkey(char *pkey_file); */ 
 
 #endif
