@@ -434,6 +434,11 @@ int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 	if (!retval) {
 		DSM_PRINT(DEBUG_SIGN,
 			  "dsi_file_mmap: Signature verification successful\n");
+		if (!strcmp (file->f_dentry->d_inode->i_sb->s_type->name, "nfs")) {
+			DSM_PRINT (DEBUG_SIGN, "File on NFS : no caching\n");
+			kfree (sig_orig);
+			goto out_file;
+		}
 		dsi_cache_signature(file->f_dentry->d_inode);
 	} else if (retval > 0) {
 		DSM_ERROR("dsi_file_mmap: Signature do not match for %s\n", file->f_dentry->d_name.name);
@@ -590,6 +595,11 @@ int dsi_bprm_check_security(struct linux_binprm *bprm)
 	if (!retval) {
 		DSM_PRINT(DEBUG_SIGN,
 			  "dsi_bprm_compute_creds: Signature verification successful for %s\n", bprm->filename);
+		if (!strcmp (file->f_dentry->d_inode->i_sb->s_type->name, "nfs")) {
+			DSM_PRINT (DEBUG_SIGN, "File on NFS : no caching\n");
+			kfree (sig_orig);
+			goto out_file;
+		}
 		dsi_cache_signature(file->f_dentry->d_inode);
 	} else if (retval > 0) {
 		DSM_ERROR("dsi_bprm_compute_creds: Signature do not match for %s\n", bprm->filename);
