@@ -60,6 +60,12 @@
 #define TAB_SIZE 256
 #endif
 
+#define get_inode_security(ino) ((unsigned long)(ino->i_security))
+#define set_inode_security(ino,val) (ino->i_security = (void *)val)
+
+#define get_file_security(file) ((unsigned long)(file->f_security))
+#define set_file_security(file,val) (file->f_security = (void *)val)
+
 extern MPI *dsi_public_key[2]; /* dsi_sig_verify.c */
 
 unsigned long int total_jiffies = 0;
@@ -89,8 +95,12 @@ int dsi_num_cached_sigs = 0;
 
 /******************************************************************************
 Description : 
- * Check for an attempt to write an executable for which a signature
- * validation was cached.
+ * For a file being opened for write, check:
+ * 1. whether it is a library currently being dlopen'ed.  If it is, then
+ *    inode->i_security > 0.
+ * 2. whether the file being opened is an executable or library with a
+ *    cached signature validation.  If it is, remove the signature validation
+ *    entry so that on the next load, the signature will be recomputed.
  *
  * We the write to happen and check the signature when loading to
  * decide about the validity of the action.  Not because the hacker
@@ -107,6 +117,11 @@ dsi_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
 		return 0;
 
 	if (inode && mask & MAY_WRITE) {
+#ifndef DSI_EXEC_ONLY
+		unsigned long isec = get_inode_security(inode);
+		if (isec > 0)
+			return -EPERM;
+#endif
 		if (is_cached_signature(inode))
 			remove_signature(inode);
 	}
@@ -327,10 +342,65 @@ dsi_verify_signature(Elf32_Shdr * elf_shdata,
 	return retval;
 }
 #ifndef DSI_EXEC_ONLY
+/*
+ * If the file is opened for writing, deny mmap(PROT_EXEC) access.
+ * Otherwise, increment the inode->i_security, which is our own
+ * writecount.  When the file is closed, f->f_security will be 1,
+ * and so we will decrement the inode->i_security.
+ * Just to be clear:  file->f_security is 1 or 0.  inode->i_security
+ * is the *number* of processes which have this file mmapped(PROT_EXEC),
+ * so it can be >1.
+ */
+static int dsi_deny_write_access(struct file *file)
+{
+	struct inode *inode = file->f_dentry->d_inode;
+	unsigned long isec;
+
+	spin_lock(&inode->i_lock);
+	isec = get_inode_security(inode);
+	if (atomic_read(&inode->i_writecount) > 0) {
+		spin_unlock(&inode->i_lock);
+		return -ETXTBSY;
+	}
+	set_inode_security(inode, (isec+1));
+	set_file_security(file, 1);
+	spin_unlock(&inode->i_lock);
+
+	return 0;
+}
+
+/*
+ * decrement our writer count on the inode.  When it hits 0, we will
+ * again allow opening the inode for writing.
+ */
+static void dsi_allow_write_access(struct file *file)
+{
+	struct inode *inode = file->f_dentry->d_inode;
+	unsigned long isec = get_inode_security(inode);
+
+	set_inode_security(inode, (isec-1));
+	set_file_security(file, 0);
+}
+
+/*
+ * the file is being closed.  If we ever mmaped it for exec, then
+ * file->f_security>0, and we decrement the inode usage count to
+ * show that we are done with it.
+ */
+void dsi_file_free_security(struct file *file)
+{
+	if (file->f_security) {
+		dsi_allow_write_access(file);
+	}
+}
+
 int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 {
 	struct elfhdr *elf_ex;
 	int retval, sh_offset;
+	/* allow_write_on_exit: 1 if we've revoked write access, but the
+	 * signature ended up bad (ie we won't allow execute access anyway) */
+	int allow_write_on_exit = 0;
 	unsigned int size;
 	Elf32_Shdr *elf_shdata;
 	char *sig_orig;
@@ -348,6 +418,18 @@ int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 		return 0;
 	if (!file->f_dentry->d_name.name)
 		return 0;
+ 
+	/*
+	 * if file_security is set, then this process has already
+	 * incremented the writer count on this inode, don't do
+	 * it again.
+	 */
+	if (get_file_security(file) == 0) {
+		allow_write_on_exit = 1;
+		retval = dsi_deny_write_access(file); 
+		if (retval)
+			return retval;
+	}
 
 	if (DIGSIG_BENCH)	/* measure exec time only on DEBUG mode. */
 		exec_time = jiffies;
@@ -357,13 +439,15 @@ int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 	if (is_cached_signature(file->f_dentry->d_inode)) {
 		DSM_PRINT(DEBUG_SIGN, "Binary %s had a cached signature validation.\n", file->f_dentry->d_name.name);
 		retval = 0;
+		allow_write_on_exit = 0;
 		goto out_file_no_buf;
 	}
 
 	buf = kmalloc (BINPRM_BUF_SIZE, DSI_SAFE_ALLOC);
 	if (!buf) {
 		DSM_ERROR ("kmalloc failed in dsi_file_mmap for buf\n");
-		return 0;
+		retval = 0;
+		goto out_file_no_buf;
 	}
 
 	/* Get the exec-header, the original bprm->buf is no longer reliable at this point */
@@ -448,6 +532,8 @@ int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 			goto out_file;
 		}
 		dsi_cache_signature(file->f_dentry->d_inode);
+
+		allow_write_on_exit = 0;
 	} else if (retval > 0) {
 		DSM_ERROR("dsi_file_mmap: Signature do not match for %s\n", file->f_dentry->d_name.name);
 		retval = -EPERM;
@@ -464,6 +550,11 @@ int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
  out_file:
 	kfree (buf);
  out_file_no_buf:
+ 	if (allow_write_on_exit) {
+		dsi_allow_write_access(file);
+		file->f_security = NULL;
+	}
+
 	if (DIGSIG_BENCH) {	/* measure exec time only on DEBUG mode. */
 		exec_time = jiffies - exec_time;
 		total_jiffies += exec_time;
@@ -644,6 +735,7 @@ void security_set_operations(struct security_operations *ops)
 	set_dsi_ops(ops, bprm_check_security);
 #else
 	set_dsi_ops (ops, file_mmap);
+	set_dsi_ops (ops, file_free_security);
 #endif
 	set_dsi_ops(ops, inode_permission);
 	set_dsi_ops(ops, inode_unlink);
