@@ -148,6 +148,9 @@ is_hashed_signature(struct inode *inode)
 {
 	struct digsig_hash_struct *p;
 
+	if (!g_init)
+		return 0;
+
 	if (!num_hashed_sigs)
 		return 0;
 
@@ -407,13 +410,15 @@ Return value:
 static int
 dsi_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
 {
+	if (!g_init)
+		return 0;
 
+	if (inode && mask & MAY_WRITE) {
+		if (is_hashed_signature(inode))
+			remove_signature(inode);
+	}
 
-  if (mask & MAY_WRITE)
-    if (is_hashed_signature(inode))
-      remove_signature(inode);
-
-  return 0;
+	return 0;
 }
 
 /******************************************************************************
@@ -630,15 +635,6 @@ int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 	if (!file)
 		return 0;
 
-	/*
-	 * Sorry, if anyone is doing a shared exec mmapping of a signed
-	 * binary, the executable could be changed right under them.
-	 * That's no good!
-	 */
-	if (prot & PROT_WRITE)
-		if ((flags & MAP_TYPE) == MAP_SHARED)
-			return -EPERM;
-
 	if (!(prot & VM_EXEC))
 		return 0;
 	if (!file->f_dentry)
@@ -787,20 +783,6 @@ Parameters  :
 Return value: 
 ******************************************************************************/
 #ifdef DSI_EXEC_ONLY
-int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
-{
-	/*
-	 * Sorry, if anyone is doing a shared exec mmapping of a signed
-	 * binary, the executable could be changed right under them.
-	 * That's no good!
-	 */
-	if (prot & PROT_WRITE)
-		if ((flags & MAP_TYPE) == MAP_SHARED)
-			return -EPERM;
-
-	return 0;
-}
-
 int dsi_bprm_check_security(struct linux_binprm *bprm)
 {
 	struct elfhdr elf_ex;
@@ -937,9 +919,10 @@ int dsi_bprm_check_security(struct linux_binprm *bprm)
 
 void security_set_operations(struct security_operations *ops)
 {
-	set_dsi_ops (ops, file_mmap);
 #ifdef DSI_EXEC_ONLY
 	set_dsi_ops(ops, bprm_check_security);
+#else
+	set_dsi_ops (ops, file_mmap);
 #endif
 	set_dsi_ops(ops, inode_permission);
 	set_dsi_ops(ops, inode_unlink);
