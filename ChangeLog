@@ -1,0 +1,11 @@
+0.2 
+=== 
+	- the main change is that we now use a script to launch the module, the module doesn't read the public key file. We use a small c program to read the public key and feed it into the module using a char device.
+
+
+
+
+0.1
+=====
+	- Initial release. 
+	
