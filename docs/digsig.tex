@@ -636,10 +636,10 @@ be its worst workloads.
 
 \section{Digital Signature of Shared Libraries}
 
-By using the {\tt file_mmap} hook, DigSig can verify shared libraries.
+By using the {\tt file\_mmap} hook, DigSig can verify shared libraries.
 Each time a program ask for a library, the kernel map into memory some
-part of the library's file.  It does this by calling do_mmap.  The LSM hook 
-{\tt file_mmap} allow DigSig to intercep the shared library before it is 
+part of the library's file.  It does this by calling do\_mmap.  The LSM hook 
+{\tt file\_mmap} allow DigSig to intercep the shared library before it is 
 executed and to verify its signature. DigSig can then allow or deny the
 execution of the shared library.  Of course, if DigSig deny execution, the
 program asking for the library will crash with a segmentation fault error.
