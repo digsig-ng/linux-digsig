@@ -142,6 +142,11 @@ procedure you can recompile the whole on non-debug mode.
 
 4) load digsig, use the public key exported in step 1 as argument 
 
+Be sure that sysfs is mounted in /sys or the key won't be loaded.
+You can mount sysfs with this command :
+mount -t sysfs sysfs /sys
+
+
 root@colby digsig-dev]# ./digsig.init start pubkey.pub
 Loading Digsig module.
 Making device for communication with the module.

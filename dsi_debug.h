@@ -52,6 +52,7 @@
 #define DEBUG_TESTS           0x00800000
 #define DEBUG_TRACEFUNC       0x01000000	/* 16777216 */
 #define DEBUG_SIGN            0x02000000
+#define DEBUG_TIME            0x04000000
 
 extern int DSIDebugLevel;
 

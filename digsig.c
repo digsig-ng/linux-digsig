@@ -32,11 +32,12 @@
 #include <asm/uaccess.h>
 #include <linux/security.h>
 #include <linux/dcache.h>
+#include <linux/kobject.h>
 
 #include "dsi_sig_verify.h"
 #include "dsi_debug.h"
 #include "dsi.h"
-#include "dsi_dev.h"
+#include "dsi_sysfs.h"
 
 #ifdef DIGSIG_LTM
 #include "ltm/tommath.h"
@@ -65,20 +66,16 @@ mp_int *M, *W, *W2;
 #else
 extern MPI *dsi_public_key[2]; /* dsi_sig_verify.c */
 #endif
-extern int device_file_major;
+
+unsigned long int total_jiffies = 0;
 
 /* Allocate and free functions for each kind of security blob. */
 static struct semaphore dsi_digsig_sem;
 
-struct file_operations dsi_fops = {
-	owner:THIS_MODULE,
-	write:dsi_write,
-};
-
 /* Indicate if module as key or not */
 int g_init = 0;
 
-int DSIDebugLevel = DEBUG_INIT | DEBUG_DEV | DEBUG_SIGN;
+int DSIDebugLevel = DEBUG_INIT | DEBUG_DEV | DEBUG_SIGN | DEBUG_TIME;
 
 struct security_operations dsi_security_ops;
 
@@ -176,25 +173,10 @@ dsi_verify_signature(char *filename, Elf32_Shdr * elf_shdata,
 		     char *sig_orig, struct file *file, int sh_offset)
 {
 	char *sig_result, *read_blocks;
-	mm_segment_t old_fs;
 	int retval, offset;
-	struct kstat stat;
 	unsigned int size;
 	unsigned int lower, upper;
 	SIGCTX *ctx;
-
-	/* Get file size from file system */
-	old_fs = get_fs();
-	set_fs(get_ds());
-	retval = vfs_stat(filename, &stat);
-	set_fs(old_fs);
-
-	if (retval) {
-		DSM_PRINT(DEBUG_SIGN,
-			  "dsi_bprm_compute_creds Unable to stat file %s: %d\n",
-			  filename, retval);
-		return -ENOENT;
-	}
 
 	down (&dsi_digsig_sem);
 	if ((ctx = dsi_sign_verify_init(HASH_SHA1, SIGN_RSA)) == NULL) {
@@ -219,7 +201,7 @@ dsi_verify_signature(char *filename, Elf32_Shdr * elf_shdata,
 
 	memset(sig_result, 0, DSI_ELF_SIG_SIZE);
 
-	for (offset = 0; offset < stat.size;
+	for (offset = 0; offset < file->f_dentry->d_inode->i_size;
 	     offset += DSI_ELF_READ_BLOCK_SIZE) {
 
 		size = kernel_read(file, offset, (char *) read_blocks,
@@ -308,12 +290,12 @@ int dsi_bprm_check_security(struct linux_binprm *bprm)
 	Elf32_Shdr *elf_shdata;
 	struct file *file;
 	char *sig_orig;
-	long exec_time;
+	long exec_time = 0;
 
 	if (!g_init)
 		return 0;
 
-	if (!DIGSIG_MODE)	/* measure exec time only on DEBUG mode. */
+	if (DSIDebugLevel & DEBUG_TIME)	/* measure exec time only on DEBUG mode. */
 		exec_time = jiffies;
 
 	DSM_PRINT(DEBUG_SIGN, "binary is %s\n", bprm->filename);
@@ -403,14 +385,14 @@ int dsi_bprm_check_security(struct linux_binprm *bprm)
 
 	if (!retval) {
 		DSM_PRINT(DEBUG_SIGN,
-			  "dsi_bprm_compute_creds: Signature verification successful\n");
+			  "dsi_bprm_compute_creds: Signature verification successful for %s\n", bprm->filename);
 	} else if (retval > 0) {
-		DSM_ERROR("dsi_bprm_compute_creds: Signatures do not match for %s\n", bprm->filename);
+		DSM_ERROR("dsi_bprm_compute_creds: Signature do not match for %s\n", bprm->filename);
 		retval = -EPERM;
 	} else {
 		DSM_PRINT(DEBUG_SIGN,
-			  "dsi_bprm_compute_creds: Signature verification failed because of errors: %d\n",
-			  retval);
+			  "dsi_bprm_compute_creds: Signature verification failed because of errors: %d for %s\n",
+			  retval, bprm->filename);
 		retval = -EPERM;
 	}
 
@@ -419,9 +401,10 @@ int dsi_bprm_check_security(struct linux_binprm *bprm)
  out_file:
 	filp_close(file, 0);
 
-	if (!DIGSIG_MODE) {	/* measure exec time only on DEBUG mode. */
+	if (DSIDebugLevel & DEBUG_TIME) {	/* measure exec time only on DEBUG mode. */
 		exec_time = jiffies - exec_time;
-		DSM_PRINT(DEBUG_SIGN, "Time to execute dsi_bprm_check_security on %s is %li\n", bprm->filename, exec_time);
+		total_jiffies += exec_time;
+		DSM_PRINT(DEBUG_TIME, "Time to execute dsi_bprm_check_security on %s is %li\n", bprm->filename, exec_time);
 	}
 	return retval;
 }
@@ -433,10 +416,27 @@ void security_set_operations(struct security_operations *ops)
 
 }
 
+char digsig_file_name[] = "digsig_key_file";
+static struct attribute digsig_attribute = {
+	.name = digsig_file_name,
+	.mode = S_IRUSR | S_IWUSR
+};
+static struct sysfs_ops digsig_sysfs_ops = {
+	.show = digsig_show,
+	.store = digsig_store
+};
+static struct kobj_type digsig_kobj_type = {
+	.sysfs_ops = &digsig_sysfs_ops,
+};
+static struct kobject digsig_key = {
+	.name = "Digsig_key",
+	.ktype = &digsig_kobj_type
+};
 
 static int __init digsig_init_module(void)
 {
 	int err = 0;
+	int tmp;
 
 	DSM_PRINT(DEBUG_INIT, "Initializing module\n");
 
@@ -449,13 +449,17 @@ static int __init digsig_init_module(void)
 		return err;
 	}
 
-	/* Opening Device interface /dev/dsi_module */
-	device_file_major = register_chrdev(0, "Digsig_module", &dsi_fops);
-	if (device_file_major < 0) {
-		DSM_ERROR ("< dsi_init_module(): Can't get a device major number\n");
-		return device_file_major;
-	}
 	init_MUTEX (&dsi_digsig_sem);
+
+	if (kobject_register (&digsig_key) != 0) {
+		DSM_ERROR ("Digsig key failed to register properly\n");
+		return -1;
+	}
+	if ((tmp = sysfs_create_file (&digsig_key, &digsig_attribute)) != 0) {
+		DSM_ERROR ("Create file failed\n");
+		return -1;
+	}
+
 #ifdef DIGSIG_LTM
 	DSM_PRINT(DEBUG_SIGN, "Initializing public key holder\n");
 	mp_init(&dsi_public_key[0]);
@@ -489,8 +493,10 @@ static void __exit digsig_exit_module(void)
 {
 	DSM_PRINT(DEBUG_INIT, "Deinitializing module\n");
 	dsi_sign_verify_free();
-	unregister_chrdev(device_file_major, "Digsig_module");
 	unregister_security(&dsi_security_ops);
+	sysfs_remove_file (&digsig_key, &digsig_attribute);
+	kobject_unregister (&digsig_key);
+
 #ifdef DIGSIG_LTM
 	DSM_PRINT(DEBUG_SIGN, "Deinitializing public key holder\n");
 	mp_clear(&dsi_public_key[0]);

@@ -1,7 +1,5 @@
 #!/bin/sh
 
-DIGSIG_DEVICE=/dev/Digsig
-
 root_or_die()
 {
     if [ "$(id -u)" != "0" ]
@@ -16,9 +14,6 @@ case "$1" in
 	root_or_die
 	echo "Loading Digsig module."
 	/sbin/insmod -f ./digsig_verif.ko || exit 1
-	echo "Making device for communication with the module."	
-	major=`awk '$2=="Digsig_module" {print $1}' /proc/devices`
-	mknod $DIGSIG_DEVICE c $major 0
 	echo "Loading public key."	
 	./tools/extract_pkey $2
 	echo "Done."
@@ -27,8 +22,6 @@ case "$1" in
 	root_or_die
 	echo "Unloading Digsig"
 	/sbin/rmmod digsig_verif
-	echo "Removing Digsig device"
-	rm -f $DIGSIG_DEVICE
 	echo "."
 	;;
     compile)
