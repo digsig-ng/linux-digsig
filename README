@@ -66,7 +66,9 @@ GPG 1.2.2 or higher.
 Performances
 =============== 
 
-This is release 0.2. We have done some benchmarks. 
+We have done some benchmarks without caching. Remark that 
+the performance impact is small after the first load of the binary as  
+the signature of the file is cached in the memory.   
 
 Macro tests: 
 
@@ -106,6 +108,17 @@ Time is in jiffies -> 1 jiffies = 1ms
 
 Linear regression
 time = 1.393899E-5 * size + 0.815081 
+
+Caching support 
+================ 
+
+From release 1.2, the caching of signatures at kernel level is supported. 
+Once the signature of a binary is verified, its signature is cached in the 
+kernel memory. Therefore, there is no need for signature verification in 
+subsequent calls to this binary. 
+When a binary file is modified, the corresponding cache entry in the memory 
+is invalidated.   
+
 
 A Very simple scenario to show how to use it  
 =======================================
