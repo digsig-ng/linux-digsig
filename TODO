@@ -1,5 +1,7 @@
 TO DO LIST (just a memo)
 ------------------------
+- Add unitary tests to DigSig, regression testing to become 
+part of CVS tree
 =============================================================
 - Use standard Makefiles instead of a digsig.init script
 =============================================================
