@@ -12,9 +12,10 @@
  *      (at your option) any later version.
  *
  * Author: David Gordon Aug 2003 
- * modifs: Makan Pourzandi Sep 2003 - Nov 2003 
- *         Vincent Roy Sep 2003 - Nov 2003, add functionality for mmap  
- *         Serge Hallyn Nov 2003, Jan 2004: add caching of signature validation
+ * modifs: Makan Pourzandi Nov 2003 - Sept 2004: fixes 
+ *         Vincent Roy  Nov 2003: add functionality for mmap  
+ *         Serge Hallyn Jan 2004: add caching of signature validation
+ *         Chris Wright Sept 2004: many fixes 
  */
 
 
@@ -60,18 +61,16 @@
 #define get_file_security(file) ((unsigned long)(file->f_security))
 #define set_file_security(file,val) (file->f_security = (void *)val)
 
-extern MPI digsig_public_key[2]; /* dsi_sig_verify.c */
-
 unsigned long int total_jiffies = 0;
 
 /* Allocate and free functions for each kind of security blob. */
-static struct semaphore digsig_sem;
+static DECLARE_MUTEX(digsig_sem);
 
 /* Indicate if module as key or not */
 int g_init = 0;
 
 /* Keep track of how we are registered */
-int secondary = 0;
+static int secondary;
 
 #ifdef DIGSIG_LOG
 int DigsigDebugLevel = DEBUG_INIT | DEBUG_SIGN;
@@ -83,9 +82,6 @@ int DigsigDebugLevel = DEBUG_INIT;
 int digsig_max_cached_sigs = 512;
 module_param(digsig_max_cached_sigs, int, 0);
 MODULE_PARM_DESC(digsig_max_cached_sigs, "Number of signatures to keep cached\n");
-
-/* Number of signature validations cached so far */
-int digsig_num_cached_sigs = 0;
 
 /******************************************************************************
 Description : 
@@ -141,13 +137,6 @@ digsig_inode_unlink(struct inode *dir, struct dentry *dentry)
 	return 0;
 }
 
-struct security_operations digsig_security_ops;
-
-#define set_digsig_ops(ops, function)				\
-		if (!ops->function) {				\
-			ops->function = digsig_##function;	\
-                }
-
 static int
 digsig_verify_signature(Elf32_Shdr * elf_shdata,
 		     char *sig_orig, struct file *file, int sh_offset);
@@ -195,7 +184,7 @@ static char *digsig_find_signature(struct elfhdr *elf_ex,
 			return NULL;
 		}
 
-		buffer = (char *) kmalloc(DIGSIG_ELF_SIG_SIZE, DIGSIG_SAFE_ALLOC);
+		buffer = kmalloc(DIGSIG_ELF_SIG_SIZE, DIGSIG_SAFE_ALLOC);
 		if (!buffer) {
 			DSM_ERROR ("kmalloc failed in %s for buffer.\n", __FUNCTION__);
 			return NULL;
@@ -231,62 +220,50 @@ static int
 digsig_verify_signature(Elf32_Shdr * elf_shdata,
 		     char *sig_orig, struct file *file, int sh_offset)
 {
-	char *sig_result, *read_blocks;
-	int retval, offset;
-	unsigned int size;
+	char *sig_result = NULL, *read_blocks = NULL;
+	int retval = -EPERM, offset;
 	unsigned int lower, upper;
-	SIGCTX *ctx;
+	loff_t i_size;
+	SIGCTX *ctx = NULL;
 
 	down (&digsig_sem);
 	if (digsig_is_revoked_sig(sig_orig)) {
 		DSM_ERROR("%s: Refusing attempt to load an ELF file with"
 			  " a revoked signature.\n", __FUNCTION__);
-		up (&digsig_sem);
-		return -EPERM;
+		goto out;
 	}
 
-	if ((ctx = digsig_sign_verify_init(HASH_SHA1, SIGN_RSA)) == NULL) {
+	retval = -ENOMEM;
+	ctx = digsig_sign_verify_init(HASH_SHA1, SIGN_RSA);
+	if (!ctx ) {
 		DSM_PRINT(DEBUG_SIGN,
 			  "%s: Cannot allocate crypto context.\n", __FUNCTION__);
-		up (&digsig_sem);
-		return -ENOMEM;
+		goto out;
 	}
 
-	sig_result = (char *) kmalloc(DIGSIG_ELF_SIG_SIZE, DIGSIG_SAFE_ALLOC);
+	sig_result = kmalloc(DIGSIG_ELF_SIG_SIZE, DIGSIG_SAFE_ALLOC);
 	if (!sig_result) {
 		DSM_ERROR ("kmalloc failed in %s for sig_result.\n", __FUNCTION__);
-		kfree (ctx->tvmem);
-		kfree (ctx);
-		up (&digsig_sem);
-		return -ENOMEM;
+		goto out;
 	}
-	read_blocks = (char *) kmalloc(DIGSIG_ELF_READ_BLOCK_SIZE, DIGSIG_SAFE_ALLOC);
+	read_blocks = kmalloc(DIGSIG_ELF_READ_BLOCK_SIZE, DIGSIG_SAFE_ALLOC);
 	if (!read_blocks) {
 		DSM_ERROR ("kmalloc failed in %s for read_block.\n", __FUNCTION__);
-		kfree (ctx->tvmem);
-		kfree (ctx);
-		kfree (sig_result);
-		up (&digsig_sem);
-		return -ENOMEM;
+		goto out;
 	}
 
 	memset(sig_result, 0, DIGSIG_ELF_SIG_SIZE);
 
-	for (offset = 0; offset < file->f_dentry->d_inode->i_size;
-	     offset += DIGSIG_ELF_READ_BLOCK_SIZE) {
+	i_size = i_size_read(file->f_dentry->d_inode);
+	for (offset = 0; offset < i_size; offset += DIGSIG_ELF_READ_BLOCK_SIZE){
 
-		size = kernel_read(file, offset, (char *) read_blocks,
+		retval = kernel_read(file, offset, (char *) read_blocks,
 				   DIGSIG_ELF_READ_BLOCK_SIZE);
-		if (size <= 0) {
+		if (retval <= 0) {
 			DSM_PRINT(DEBUG_SIGN,
 				  "%s: Unable to read signature in blocks: %d\n",
-				  __FUNCTION__, size);
-			kfree(sig_result);
-			kfree(read_blocks);
-			kfree(ctx->tvmem);
-			kfree(ctx);
-			up (&digsig_sem);
-			return -1;
+				  __FUNCTION__, retval);
+			goto out;
 		}
 
 		/* Makan: This is in order to avoid building a buffer
@@ -308,31 +285,32 @@ digsig_verify_signature(Elf32_Shdr * elf_shdata,
 		}
 
 		/* continue verification loop */
-		if (digsig_sign_verify_update(ctx, read_blocks, size) != 0) {
+		retval = digsig_sign_verify_update(ctx, read_blocks, retval);
+		if (retval < 0) {
 			DSM_PRINT(DEBUG_SIGN,
 				  "%s: Error updating crypto verification\n", __FUNCTION__);
-			kfree(sig_result);
-			kfree(read_blocks);
-			kfree(ctx->tvmem);
-			kfree(ctx);
-			up (&digsig_sem);
-			return -1;
+			goto out;
 		}
 	}
 
 	/* A bit of bsign formatting else hashes won't match, works with bsign v0.4.4 */
-	if ((retval = digsig_sign_verify_final(ctx, sig_result, DIGSIG_ELF_SIG_SIZE,
-					    sig_orig + DIGSIG_BSIGN_INFOS)) < 0) {
+	retval = digsig_sign_verify_final(ctx, sig_result, DIGSIG_ELF_SIG_SIZE,
+					    sig_orig + DIGSIG_BSIGN_INFOS);
+	if (retval < 0) {
 		DSM_PRINT(DEBUG_SIGN,
 			  "%s: Error calculating final crypto verification\n", __FUNCTION__);
-		kfree(sig_result);
-		kfree(read_blocks);
-		up (&digsig_sem);
-		return -1;
+		goto out;
 	}
 
+	retval = 0;
+
+out:
 	kfree(sig_result);
 	kfree(read_blocks);
+	if (ctx) {
+		kfree(ctx->tvmem);
+		kfree(ctx);
+	}
 	up (&digsig_sem);
 	return retval;
 }
@@ -382,7 +360,7 @@ static void digsig_allow_write_access(struct file *file)
  * file->f_security>0, and we decrement the inode usage count to
  * show that we are done with it.
  */
-void digsig_file_free_security(struct file *file)
+static void digsig_file_free_security(struct file *file)
 {
 	if (file->f_security) {
 		digsig_allow_write_access(file);
@@ -426,18 +404,17 @@ static inline struct elfhdr *read_elf_header(struct file *file)
 {
 	struct elfhdr *elf_ex;
 
-	elf_ex =
-	    (struct elfhdr *)kmalloc(sizeof(struct elfhdr), DIGSIG_SAFE_ALLOC);
+	elf_ex = kmalloc(sizeof(struct elfhdr), DIGSIG_SAFE_ALLOC);
 	if (!elf_ex) {
 		DSM_ERROR ("%s: kmalloc failed for elf_ex\n", __FUNCTION__);
-		return NULL;
+		return ERR_PTR(-ENOMEM);
 	}
 
 	kernel_read(file, 0, (char *)elf_ex, sizeof(struct elfhdr));
 
 	if (elf_sanity_check(elf_ex)) {
 		kfree(elf_ex);
-		return NULL;
+		return ERR_PTR(-EINVAL);
 	}
 
 	return elf_ex;
@@ -449,7 +426,7 @@ read_section_header(struct file *file, int sh_size, int sh_off)
 	Elf32_Shdr *elf_shdata;
 	int retval;
 	
-	elf_shdata = (Elf32_Shdr *) kmalloc(sh_size, DIGSIG_SAFE_ALLOC);
+	elf_shdata = kmalloc(sh_size, DIGSIG_SAFE_ALLOC);
 	if (!elf_shdata) {
 		DSM_ERROR("%s: Cannot allocate memory to read Section Header\n",
 			  __FUNCTION__);
@@ -493,7 +470,7 @@ static inline int is_unprotected_file(struct file *file)
 			__FUNCTION__, file->f_dentry->d_name.name, exec_time); \
 	}
 	
-int digsig_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
+static int digsig_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 {
 	struct elfhdr *elf_ex;
 	int retval, sh_offset;
@@ -566,7 +543,7 @@ int digsig_file_mmap(struct file * file, unsigned long prot, unsigned long flags
 	}
 
 	/* Verify binary's signature */
-	retval = digsig_verify_signature (elf_shdata, sig_orig, file, sh_offset);
+	retval = digsig_verify_signature(elf_shdata, sig_orig, file, sh_offset);
 
 	if (!retval) {
 		DSM_PRINT(DEBUG_SIGN,
@@ -587,71 +564,67 @@ int digsig_file_mmap(struct file * file, unsigned long prot, unsigned long flags
 	kfree (sig_orig);
  out_free_shdata:
 	kfree (elf_shdata);
-
  out_with_file:
 	kfree (elf_ex);
  out_file_no_buf:
- 	if (allow_write_on_exit) {
+ 	if (allow_write_on_exit)
 		digsig_allow_write_access(file);
-		file->f_security = NULL;
-	}
 
 	end_digsig_bench;
 
 	return retval;
 }
 
-void security_set_operations(struct security_operations *ops)
-{
-	set_digsig_ops(ops, file_mmap);
-	set_digsig_ops(ops, file_free_security);
-	set_digsig_ops(ops, inode_permission);
-	set_digsig_ops(ops, inode_unlink);
-}
+static struct security_operations digsig_security_ops = {
+	.file_mmap		= digsig_file_mmap,
+	.file_free_security	= digsig_file_free_security,
+	.inode_permission	= digsig_inode_permission,
+	.inode_unlink		= digsig_inode_unlink,
+};
 
 static int __init digsig_init_module(void)
 {
+	int ret = -ENOMEM;
 	DSM_PRINT(DEBUG_INIT, "Initializing module\n");
 
 	/* initialize caching mechanisms */ 
 
-	if (digsig_init_caching()){
-	  return -ENOMEM;
-	}
-	digsig_init_revocation();
+	if (digsig_init_caching())
+		goto out;
 
-	/* initialize DigSig's hooks */
-	security_set_operations(&digsig_security_ops);
-
-	/* register */
-	if (register_security (&digsig_security_ops)) {
-		DSM_ERROR ("%s: Failure registering DigSig as primairy security module\n", __FUNCTION__);
-		if (mod_reg_security ("digsig_verif", &digsig_security_ops)) {
-			DSM_ERROR ("%s: Failure registering DigSig as secondary module\n", __FUNCTION__);
-			return -EINVAL;
-		}
-		DSM_PRINT (DEBUG_INIT, "Registered as secondary module\n");
-		secondary = 1;
-	}
-
-	init_MUTEX (&digsig_sem);
-
+	ret = -EINVAL;
 	if (digsig_init_sysfs()) {
 		DSM_ERROR("Error setting up sysfs for DigSig\n");
-		return -EINVAL;
+		goto out_cache;
 	}
 
+	/* register */
+	if (register_security(&digsig_security_ops)) {
+		DSM_ERROR("%s: Failure registering DigSig as primairy security module\n", __FUNCTION__);
+		if (mod_reg_security("digsig_verif", &digsig_security_ops)) {
+			DSM_ERROR("%s: Failure registering DigSig as secondary module\n", __FUNCTION__);
+			goto out_sysfs;
+		}
+		DSM_PRINT(DEBUG_INIT, "Registered as secondary module\n");
+		secondary = 1;
+	}
 	return 0;
+out_sysfs:
+	digsig_cleanup_sysfs();
+out_cache:
+	digsig_cache_cleanup();
+out:
+	return ret;
 }
 
 static void __exit digsig_exit_module(void)
 {
 	DSM_PRINT (DEBUG_INIT, "Deinitializing module\n");
 	g_init = 0;
-	digsig_sign_verify_free ();
-	digsig_cleanup_sysfs ();
-	digsig_cleanup_revocation ();
-	digsig_cache_cleanup ();
+	digsig_sign_verify_free();
+	digsig_cleanup_sysfs();
+	digsig_cleanup_revocation();
+	digsig_cache_cleanup();
 	mpi_free(digsig_public_key[0]);
 	mpi_free(digsig_public_key[1]);
 	if (secondary) {
@@ -666,7 +639,7 @@ static void __exit digsig_exit_module(void)
 	}
 }
 
-module_init(digsig_init_module);
+security_initcall(digsig_init_module);
 module_exit(digsig_exit_module);
 
 /* see linux/module.h */

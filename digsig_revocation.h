@@ -15,18 +15,11 @@
  *         
  */
 
-#ifndef __DSI_REVOKE_H
+#ifndef _DSI_REVOKE_H
+#define _DSI_REVOKE_H
 
 #include <linux/fs.h>
 #include "gnupg/mpi/mpi.h"
-
-void digsig_init_revocation(void);
-void digsig_cleanup_revocation(void);
-#ifdef DIGSIG_REVOCATION
-int digsig_is_revoked_sig(char *buffer);
-#else
-#define digsig_is_revoked_sig(x) 0
-#endif
 
 /*
  * A linear array of revoked signatures.
@@ -39,4 +32,14 @@ struct revoked_sig {
 	MPI sig;
 };
 
+void digsig_init_revocation(void);
+void digsig_cleanup_revocation(void);
+void digsig_add_revoked_sig(struct revoked_sig *sig);
+#ifdef DIGSIG_REVOCATION
+int digsig_is_revoked_sig(char *buffer);
+#else
+#define digsig_is_revoked_sig(x) 0
 #endif
+
+#endif /* _DSI_REVOKE_H */
+

@@ -34,10 +34,8 @@
 #define DIGSIG_BENCH 0
 #endif
 
-extern int DigsigDebugLevel;
-
-extern int digsig_max_hashed_sigs, digsig_num_hashed_sigs;
-struct list_head digsig_revoked_sigs;
+static LIST_HEAD(digsig_revoked_sigs);
+static spinlock_t revoked_list_lock = SPIN_LOCK_UNLOCKED;
 
 /*
  * Description: Called at module unload to free the list of revoked
@@ -48,6 +46,7 @@ void digsig_free_revoked_sigs(void)
 	struct list_head *tmp;
 	struct revoked_sig *rsig;
 
+	spin_lock(&revoked_list_lock);
 	while (!list_empty(&digsig_revoked_sigs)) {
 		tmp = digsig_revoked_sigs.next;
 		if (tmp != &digsig_revoked_sigs) {
@@ -57,9 +56,10 @@ void digsig_free_revoked_sigs(void)
 			kfree(rsig);
 		} else {
 			DSM_ERROR("major list screwyness\n");
-			return;
+			break;
 		}
 	}
+	spin_unlock(&revoked_list_lock);
 }
 
 /*
@@ -70,33 +70,34 @@ void digsig_free_revoked_sigs(void)
 #ifdef DIGSIG_REVOCATION
 int digsig_is_revoked_sig(char *buffer)
 {
-	struct list_head *tmp;
 	struct revoked_sig *rsig;
 	char *tmp1 = buffer + DIGSIG_BSIGN_INFOS + DIGSIG_RSA_DATA_OFFSET;
 	int count = DIGSIG_ELF_SIG_SIZE - DIGSIG_BSIGN_INFOS - DIGSIG_RSA_DATA_OFFSET;
 	int ret = 0;
 	MPI file_sig = mpi_read_from_buffer(tmp1, &count, 0);
 
-	list_for_each(tmp, &digsig_revoked_sigs) {
-		rsig = list_entry(tmp, struct revoked_sig, next);
+	spin_lock(&revoked_list_lock);
+	list_for_each_entry(rsig, &digsig_revoked_sigs, next) {
 		if (mpi_cmp(file_sig, rsig->sig) == 0) {
 			ret = 1;
 			goto out;
 		}
 	}
-
 out:
+	spin_unlock(&revoked_list_lock);
 	mpi_free(file_sig);
 	return ret;
 }
 #endif
 
-inline void digsig_init_revocation()
+void digsig_add_revoked_sig(struct revoked_sig *sig)
 {
-	INIT_LIST_HEAD(&digsig_revoked_sigs);
+	spin_lock(&revoked_list_lock);
+        list_add_tail(&sig->next, &digsig_revoked_sigs);
+	spin_unlock(&revoked_list_lock);
 }
 
-inline void digsig_cleanup_revocation()
+void digsig_cleanup_revocation(void)
 {
 	digsig_free_revoked_sigs();
 }

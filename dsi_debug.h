@@ -18,8 +18,8 @@
  */
 
 
-#ifndef __DSI_DEBUG_H
-#define __DSI_DEBUG_H
+#ifndef _DSI_DEBUG_H
+#define _DSI_DEBUG_H
 
 #define DIGSIG_MODULE_NAME "DIGSIG MODULE"
 
@@ -63,4 +63,4 @@ extern int DigsigDebugLevel;
 #define DSM_PRINT_NO_PREFIX(dbg,fmt,arg...) \
     if (dbg & DigsigDebugLevel) printk(fmt,##arg)
 
-#endif				/* __DSI_DEBUG_H */
+#endif /* _DSI_DEBUG_H */

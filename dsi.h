@@ -20,8 +20,8 @@
  */
 
 
-#ifndef __DSI_H
-#define __DSI_H
+#ifndef _DSI_H
+#define _DSI_H
 
 #ifdef MODULE
 #include <linux/kernel.h>
@@ -49,4 +49,6 @@
 
 #endif				/* MODULE */
 
-#endif
+extern int g_init;
+
+#endif /* _DSI_H */

@@ -15,16 +15,17 @@
  *         
  */
 
-#ifndef __DSI_CACHE_H
+#ifndef _DSI_CACHE_H
+#define _DSI_CACHE_H
 
 #include <linux/fs.h>
 #include "gnupg/mpi/mpi.h"
 
 int is_cached_signature(struct inode *inode);
 void remove_signature(struct inode *inode);
-int digsig_purge_cache(int num);
 void digsig_cache_signature(struct inode *inode);
 int digsig_init_caching(void);
 void digsig_cache_cleanup(void);
 
-#endif
+#endif /* _DSI_CACHE_H */
+

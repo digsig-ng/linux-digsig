@@ -33,10 +33,9 @@
 #define DIGSIG_BENCH 0
 #endif
 
-extern int DigsigDebugLevel;
-
-extern int digsig_max_cached_sigs, digsig_num_cached_sigs;
-extern int g_init;
+extern int digsig_max_cached_sigs;
+/* Number of signature validations cached so far */
+static int digsig_num_cached_sigs;
 
 /*
  * digsig_hash_table:
@@ -71,8 +70,8 @@ struct digsig_hash_table {
 	struct digsig_hash_table *prev;  /* only set if dynamically alloced */
 };
 
-static struct digsig_hash_table *sig_cache = NULL;
-static struct list_head sig_cache_lru;
+static struct digsig_hash_table *sig_cache;
+static LIST_HEAD(sig_cache_lru);
 static spinlock_t sig_cache_spinlock = SPIN_LOCK_UNLOCKED;
 
 /******************************************************************************
@@ -177,7 +176,7 @@ Description :
 Parameters  : @num: number of cached sig validation entries to clear.
 Return value: number of entries actually deleted.
 ******************************************************************************/
-int digsig_purge_cache(int num)
+static int digsig_purge_cache(int num)
 {			
 	int i=0;
 	struct digsig_hash_table *tmph, *del;
@@ -313,7 +312,7 @@ Description : Initialize caching
 Parameters  : none
 Return value: 0 on success, 1 on failure.
 ******************************************************************************/
-int digsig_init_caching(void)
+int __init digsig_init_caching(void)
 {
         int tmp;
         
@@ -321,7 +320,7 @@ int digsig_init_caching(void)
 				sizeof(struct digsig_hash_table), GFP_ATOMIC); 
 				/* GFP_KERNEL); */ 
 	
-	if (IS_ERR(sig_cache)) {
+	if (!sig_cache) {
 	  DSM_PRINT(DEBUG_ERROR, "No memory to initialize digsig cache.\n");
 		return 1;
 	}
@@ -333,10 +332,7 @@ int digsig_init_caching(void)
 		sig_cache[tmp].orig = 1;
 	}
 
-	INIT_LIST_HEAD(&sig_cache_lru);
-
 	return 0; 
-
 }
 
 /*

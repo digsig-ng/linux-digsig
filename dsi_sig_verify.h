@@ -14,8 +14,8 @@
  *         David Gordon
  */
 
-#ifndef _DSI_SIG_VERIFY_H_
-#define _DSI_SIG_VERIFY_H_
+#ifndef _DSI_SIG_VERIFY_H
+#define _DSI_SIG_VERIFY_H
 
 #include <linux/crypto.h>
 #include <asm/scatterlist.h>
@@ -79,6 +79,7 @@ typedef struct sig_ctx_st {
 } SIGCTX;
 
 extern int gDigestLength[1];
+extern MPI digsig_public_key[];
 
 SIGCTX *digsig_sign_verify_init(int hashalgo, int signalgo);
 int digsig_sign_verify_update(SIGCTX * ctx, char *buf, int buflen);
@@ -90,4 +91,4 @@ int digsig_init_pkey(const char read_par, unsigned char *raw_public_key, int mpi
 
 
 
-#endif
+#endif /* _DSI_SIG_VERIFY_H */
