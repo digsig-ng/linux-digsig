@@ -139,7 +139,7 @@ digsig_inode_unlink(struct inode *dir, struct dentry *dentry)
 
 static int
 digsig_verify_signature(Elf32_Shdr * elf_shdata,
-		     char *sig_orig, struct file *file, int sh_offset);
+	     char *sig_orig, struct file *file, unsigned int sh_offset);
 
 
 /******************************************************************************
@@ -157,7 +157,7 @@ Return value: Upon suscess: buffer containing signature (size of signature is fi
 ******************************************************************************/
 static char *digsig_find_signature(struct elfhdr *elf_ex,
 				Elf32_Shdr * elf_shdata, struct file *file,
-				int *sh_offset)
+				unsigned int *sh_offset)
 {
 	int i = 0;
 	int retval;
@@ -218,11 +218,11 @@ Return value: 0 for false or 1 for true or -1 for error
 ******************************************************************************/
 static int
 digsig_verify_signature(Elf32_Shdr * elf_shdata,
-		     char *sig_orig, struct file *file, int sh_offset)
+	     char *sig_orig, struct file *file, unsigned int sh_offset)
 {
 	char *sig_result = NULL, *read_blocks = NULL;
-	int retval = -EPERM, offset;
-	unsigned int lower, upper;
+	int retval = -EPERM;
+	unsigned int lower, upper, offset;
 	loff_t i_size;
 	SIGCTX *ctx = NULL;
 
@@ -477,11 +477,11 @@ static inline int is_unprotected_file(struct file *file)
 static int digsig_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 {
 	struct elfhdr *elf_ex;
-	int retval, sh_offset;
+	int retval;
 	/* allow_write_on_exit: 1 if we've revoked write access, but the
 	 * signature ended up bad (ie we won't allow execute access anyway) */
 	int allow_write_on_exit = 0;
-	unsigned int size;
+	unsigned int size, sh_offset;
 	Elf32_Shdr *elf_shdata;
 	char *sig_orig;
 	long exec_time = 0;
