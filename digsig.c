@@ -350,10 +350,13 @@ static int digsig_deny_write_access(struct file *file)
 static void digsig_allow_write_access(struct file *file)
 {
 	struct inode *inode = file->f_dentry->d_inode;
-	unsigned long isec = get_inode_security(inode);
+	unsigned long isec;
 
+	spin_lock(&inode->i_lock);
+	isec = get_inode_security(inode);
 	set_inode_security(inode, (isec-1));
 	set_file_security(file, 0);
+	spin_unlock(&inode->i_lock);
 }
 
 /*
