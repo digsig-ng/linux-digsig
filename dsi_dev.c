@@ -69,12 +69,15 @@ ssize_t dsi_write(struct file *filp, const char *buff, size_t count,
 		dsi_mpi_size_n = count - 1;
 		DSM_PRINT(DEBUG_DEV, "pkey->n size is %i\n",
 			  dsi_mpi_size_n);
+		/* 
 		DSM_PRINT(DEBUG_DEV, "pkey->n MPI:\n{ ");
 		for (i = 0; i < dsi_mpi_size_n; i++) {
 			DSM_PRINT(DEBUG_DEV, "%#x, ",
 				  raw_public_key_n[i] & 0xff);
 		}
 		DSM_PRINT(DEBUG_DEV, "}\n");
+		*/ 
+
 	} else if (buff[0] == 'e') {
 		raw_public_key_e =
 		    (unsigned char *) kmalloc(count - 1, DSI_SAFE_ALLOC);
@@ -87,12 +90,14 @@ ssize_t dsi_write(struct file *filp, const char *buff, size_t count,
 		dsi_mpi_size_e = count - 1;
 		DSM_PRINT(DEBUG_DEV, "pkey->e size is %i\n",
 			  dsi_mpi_size_e);
+		/* 
 		DSM_PRINT(DEBUG_DEV, "pkey->e MPI:\n{ ");
 		for (i = 0; i < dsi_mpi_size_e; i++) {
 			DSM_PRINT(DEBUG_DEV, "%#x, ",
 				  raw_public_key_e[i] & 0xff);
 		}
 		DSM_PRINT(DEBUG_DEV, "}\n");
+		*/ 
 	} else {
 		return -EINVAL;
 	}

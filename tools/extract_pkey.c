@@ -13,7 +13,8 @@
  *      the Free Software Foundation; either version 2 of the License, or
  *      (at your option) any later version.
  * 
- * Author: David Gordon
+ * Author: David Gordon Aug 2003 
+ * Modifs: Vincent Roy Sept 2003 
  */
 
 #include <errno.h>
@@ -89,11 +90,13 @@ int main(int argc, char **argv)
 			key = temp;
 		}
 	}
+	/* 
 	printf("pkey->n MPI:\n{ ");
 	for (i = 0; i < key_offset; i++  ) {
 		printf("%#x, ", key[i] & 0xff);
 	}
 	printf("}\n");
+	*/ 
 	write (module_file, key, key_offset);
 
 	key_offset = 0;
@@ -117,11 +120,13 @@ int main(int argc, char **argv)
 		key[key_offset++] = c;
 	}
 
+	/* 
 	printf("pkey->n MPI:\n{ ");
 	for (i = 0; i < key_offset; i++  ) {
 		printf("%#x, ", key[i] & 0xff);
 	}
 	printf("}\n");
+	*/ 
 	write (module_file, key, key_offset);
 
 	return 0;
