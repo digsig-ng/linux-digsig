@@ -17,7 +17,10 @@
  * Modifs: Vincent Roy Sept 2003 
  */
 
+#include <stdio.h>
+#include <stdlib.h>
 #include <errno.h>
+#include <string.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -34,8 +37,7 @@ void usage();
 
 int main(int argc, char **argv)
 {
-	int pkey_file, module_file, nread, count, i;
-	unsigned int num;
+	int pkey_file, module_file, i;
 	unsigned int len;
 	unsigned char c;
 	unsigned char *key;
