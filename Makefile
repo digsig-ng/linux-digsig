@@ -1,7 +1,7 @@
 digsig-ltm =
 
 obj-m := digsig_verif.o
-digsig_verif-objs := digsig.o dsi_sysfs.o
+digsig_verif-objs := digsig.o dsi_sysfs.o digsig_cache.o
 
 ifdef digsig-ltm
 digsig_verif-objs += dsi_sig_verify_ltm.o dsi_pkcs1.o dsi_ltm_rsa.o \
