@@ -137,10 +137,26 @@ digsig_inode_unlink(struct inode *dir, struct dentry *dentry)
 	return 0;
 }
 
-static int
-digsig_verify_signature(Elf32_Shdr * elf_shdata,
-	     char *sig_orig, struct file *file, unsigned int sh_offset);
+static char *digsig_read_signature(struct file *file, unsigned long offset)
+{
+	int retval;
+	char *buffer = kmalloc(DIGSIG_ELF_SIG_SIZE, DIGSIG_SAFE_ALLOC);
 
+	if (!buffer) {
+		DSM_ERROR ("kmalloc failed in %s for buffer.\n", __FUNCTION__);
+		return NULL;
+	}
+	retval = kernel_read(file, offset, (char *) buffer,
+					 DIGSIG_ELF_SIG_SIZE);
+	if (retval != DIGSIG_ELF_SIG_SIZE) {
+		DSM_PRINT(DEBUG_SIGN, "%s: Unable to read signature: %d\n",
+			  __FUNCTION__, retval);
+		kfree(buffer);
+		buffer = NULL;
+	}
+
+	return buffer;
+}
 
 /******************************************************************************
 Description : find signature section in elf binary
@@ -155,13 +171,12 @@ Return value: Upon suscess: buffer containing signature (size of signature is fi
               depending on algorithm used)
               Failure: null pointer 
 ******************************************************************************/
-static char *digsig_find_signature(struct elfhdr *elf_ex,
+static char *digsig_find_signature32(struct elf32_hdr *elf_ex,
 				Elf32_Shdr * elf_shdata, struct file *file,
-				unsigned int *sh_offset)
+				unsigned long *sh_offset)
 {
 	int i = 0;
-	int retval;
-	char *buffer = NULL;
+	char *buffer;
 
 	while (i < elf_ex->e_shnum
 	       && elf_shdata[i].sh_type != DIGSIG_ELF_SIG_SECTION) {
@@ -170,38 +185,44 @@ static char *digsig_find_signature(struct elfhdr *elf_ex,
 
 	if (i == elf_ex->e_shnum)
 		return NULL;
+	if (elf_shdata[i].sh_type != DIGSIG_ELF_SIG_SECTION)
+		return NULL;
+	if (elf_shdata[i].sh_size != DIGSIG_ELF_SIG_SIZE)
+		return NULL;
 
-	if (elf_shdata[i].sh_type == DIGSIG_ELF_SIG_SECTION) {
-		DSM_PRINT(DEBUG_SIGN,
-			  "%s: Found signature section\n", __FUNCTION__);
+	buffer = digsig_read_signature(file, elf_shdata[i].sh_offset);
+	if (!buffer)
+		return NULL;
 
-		/* Now get DIGSIG_ELF_SIG_SIZE bytes of signature section */
+	*sh_offset = elf_shdata[i].sh_offset;
 
-		if (elf_shdata[i].sh_size != DIGSIG_ELF_SIG_SIZE) {
-			DSM_PRINT(DEBUG_SIGN,
-				  "%s: Signature section is not %u bytes\n",
-				  __FUNCTION__, DIGSIG_ELF_SIG_SECTION);
-			return NULL;
-		}
+	return buffer;
+}
 
-		buffer = kmalloc(DIGSIG_ELF_SIG_SIZE, DIGSIG_SAFE_ALLOC);
-		if (!buffer) {
-			DSM_ERROR ("kmalloc failed in %s for buffer.\n", __FUNCTION__);
-			return NULL;
-		}
+static char *digsig_find_signature64(struct elf64_hdr *elf_ex,
+				Elf64_Shdr * elf_shdata, struct file *file,
+				unsigned long *sh_offset)
+{
+	int i = 0;
+	char *buffer;
 
-		retval = kernel_read(file, elf_shdata[i].sh_offset,
-				     (char *) buffer, DIGSIG_ELF_SIG_SIZE);
-		if ((retval < 0) || (retval != DIGSIG_ELF_SIG_SIZE)) {
-			DSM_PRINT(DEBUG_SIGN,
-				  "%s: Unable to read signature: %d\n",
-				  __FUNCTION__, retval);
-			kfree(buffer);
-			return NULL;
-		}
-
-		*sh_offset = elf_shdata[i].sh_offset;
+	while (i < elf_ex->e_shnum
+	       && elf_shdata[i].sh_type != DIGSIG_ELF_SIG_SECTION) {
+		i++;
 	}
+
+	if (i == elf_ex->e_shnum)
+		return NULL;
+	if (elf_shdata[i].sh_type != DIGSIG_ELF_SIG_SECTION)
+		return NULL;
+	if (elf_shdata[i].sh_size != DIGSIG_ELF_SIG_SIZE)
+		return NULL;
+
+	buffer = digsig_read_signature(file, elf_shdata[i].sh_offset);
+	if (!buffer)
+		return NULL;
+
+	*sh_offset = elf_shdata[i].sh_offset;
 
 	return buffer;
 }
@@ -217,8 +238,8 @@ Parameters  :
 Return value: 0 for false or 1 for true or -1 for error
 ******************************************************************************/
 static int
-digsig_verify_signature(Elf32_Shdr * elf_shdata,
-	     char *sig_orig, struct file *file, unsigned int sh_offset)
+digsig_verify_signature(char *sig_orig, struct file *file,
+		 unsigned long sh_offset)
 {
 	char *sig_result = NULL, *read_blocks = NULL;
 	int retval = -EPERM;
@@ -377,7 +398,7 @@ static void digsig_file_free_security(struct file *file)
  * @param elf_hdr pointer to an elfhdr
  * @return 0 if header ok, -2 if non-elf, -1 otherwise
  */
-static inline int elf_sanity_check(struct elfhdr *elf_hdr)
+static inline int elf_sanity_check32(struct elf32_hdr *elf_hdr)
 {
 	if (memcmp(elf_hdr->e_ident, ELFMAG, SELFMAG) != 0) {
 		DSM_PRINT(DEBUG_SIGN, "%s: Binary is not elf format\n",
@@ -404,6 +425,33 @@ static inline int elf_sanity_check(struct elfhdr *elf_hdr)
 	return 0;
 }
 
+static inline int elf_sanity_check64(struct elf64_hdr *elf_hdr)
+{
+	if (memcmp(elf_hdr->e_ident, ELFMAG, SELFMAG) != 0) {
+		DSM_PRINT(DEBUG_SIGN, "%s: Binary is not elf format\n",
+			  __FUNCTION__);
+		return -2;
+	}
+
+	if (!elf_hdr->e_shoff) {
+		DSM_ERROR("%s: No section header!\n", __FUNCTION__);
+		return -1;
+	}
+
+	if (elf_hdr->e_shentsize != sizeof(Elf64_Shdr)) {
+		DSM_ERROR("%s: Section header is wrong size!\n", __FUNCTION__);
+		return -1;
+	}
+
+	if (elf_hdr->e_shnum > 65536U / sizeof(Elf64_Shdr)) {
+		DSM_ERROR("%s: Too many entries in Section Header!\n",
+			  __FUNCTION__);
+		return -1;
+	}
+
+	return 0;
+}
+
 /*
  * If we decide mmap of nonelf is bad, we can make this -EPERM.
  * However, note that bsign does mmap of SYSV shmem, so we can't
@@ -411,20 +459,23 @@ static inline int elf_sanity_check(struct elfhdr *elf_hdr)
  */
 #define NONELF_PERM NULL
 
-static inline struct elfhdr *read_elf_header(struct file *file)
+static inline struct elf64_hdr *read_elf_header(struct file *file)
 {
-	struct elfhdr *elf_ex;
+	struct elf64_hdr *elf_ex;
 	int retval;
 
-	elf_ex = kmalloc(sizeof(struct elfhdr), DIGSIG_SAFE_ALLOC);
+	elf_ex = kmalloc(sizeof(struct elf64_hdr), DIGSIG_SAFE_ALLOC);
 	if (!elf_ex) {
 		DSM_ERROR ("%s: kmalloc failed for elf_ex\n", __FUNCTION__);
 		return ERR_PTR(-ENOMEM);
 	}
 
-	kernel_read(file, 0, (char *)elf_ex, sizeof(struct elfhdr));
+	kernel_read(file, 0, (char *)elf_ex, sizeof(struct elf64_hdr));
 
-	retval = elf_sanity_check(elf_ex);
+	if (elf_ex->e_ident[EI_CLASS] == ELFCLASS32)
+		retval = elf_sanity_check32((struct elf32_hdr *) elf_ex);
+	else
+		retval = elf_sanity_check64(elf_ex);
 	if (retval) {
 		kfree(elf_ex);
 		if (retval == -1)
@@ -436,10 +487,11 @@ static inline struct elfhdr *read_elf_header(struct file *file)
 	return elf_ex;
 }
 
-static inline Elf32_Shdr *
-read_section_header(struct file *file, int sh_size, int sh_off)
+static inline Elf64_Shdr *
+read_section_header(struct file *file, unsigned long sh_size,
+					unsigned long sh_off)
 {
-	Elf32_Shdr *elf_shdata;
+	Elf64_Shdr *elf_shdata;
 	int retval;
 	
 	elf_shdata = kmalloc(sh_size, DIGSIG_SAFE_ALLOC);
@@ -451,8 +503,8 @@ read_section_header(struct file *file, int sh_size, int sh_off)
 
 	retval = kernel_read(file, sh_off, (char *)elf_shdata, sh_size);
 
-	if (retval < 0 || retval != sh_size) {
-		DSM_ERROR("%s: Unable to read binary %s (offset %d size %d): %d\n", __FUNCTION__,
+	if (retval < 0 || (unsigned long)retval != sh_size) {
+		DSM_ERROR("%s: Unable to read binary %s (offset %lu size %lu): %d\n", __FUNCTION__,
 			  file->f_dentry->d_name.name, sh_off, sh_size, retval);
 		kfree(elf_shdata);
 		return ERR_PTR(-EINVAL);
@@ -488,15 +540,17 @@ static inline int is_unprotected_file(struct file *file)
 	
 static int digsig_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 {
-	struct elfhdr *elf_ex;
+	struct elf64_hdr *elf64_ex;
+	struct elf32_hdr *elf32_ex;
 	int retval, die_if_elf = 0;
 	/* allow_write_on_exit: 1 if we've revoked write access, but the
 	 * signature ended up bad (ie we won't allow execute access anyway) */
 	int allow_write_on_exit = 0;
-	unsigned int size, sh_offset;
-	Elf32_Shdr *elf_shdata;
+	unsigned long size, sh_offset;
+	Elf64_Shdr *elf64_shdata;
 	char *sig_orig;
 	long exec_time = 0;
+	int arch32 = 0;
 
 	if (!g_init)
 		return 0;
@@ -508,6 +562,13 @@ static int digsig_file_mmap(struct file * file, unsigned long prot, unsigned lon
 	if (!file->f_dentry)
 		return 0;
 	if (!file->f_dentry->d_name.name)
+		return 0;
+
+	if (strcmp(file->f_dentry->d_name.name, "rmmod") == 0)
+		return 0;
+	if (strcmp(file->f_dentry->d_name.name, "libc.so.6") == 0)
+		return 0;
+	if (strcmp(file->f_dentry->d_name.name, "ld.so.1") == 0)
 		return 0;
 
 	if (is_unprotected_file(file))
@@ -539,11 +600,11 @@ static int digsig_file_mmap(struct file * file, unsigned long prot, unsigned lon
 		goto out_file_no_buf;
 	}
 
-	elf_ex = read_elf_header(file);
-	if (elf_ex == NULL) /* non-ELF, perhaps SYSV shmem */
+	elf64_ex = read_elf_header(file);
+	if (elf64_ex == NULL) /* non-ELF, perhaps SYSV shmem */
 		goto out_file_no_buf;
-	if (IS_ERR(elf_ex)) {
-		retval = PTR_ERR(elf_ex);
+	if (IS_ERR(elf64_ex)) {
+		retval = PTR_ERR(elf64_ex);
 		goto out_file_no_buf;
 	}
 	if (die_if_elf) {
@@ -554,15 +615,32 @@ static int digsig_file_mmap(struct file * file, unsigned long prot, unsigned lon
 
 	retval = DIGSIG_MODE;
 
-	size = elf_ex->e_shnum * sizeof(Elf32_Shdr);
-	elf_shdata = read_section_header(file, size, elf_ex->e_shoff);
-	if (IS_ERR(elf_shdata)) {
-		retval=-EINVAL;
+	arch32 = (elf64_ex->e_ident[EI_CLASS] == ELFCLASS32);
+
+	elf32_ex = (struct elf32_hdr *) elf64_ex;
+	if (arch32) {
+		size = elf32_ex->e_shnum * sizeof(Elf32_Shdr);
+		elf64_shdata = read_section_header(file, size, 
+			elf32_ex->e_shoff);
+	} else {
+		size = elf64_ex->e_shnum * sizeof(Elf64_Shdr);
+		elf64_shdata = read_section_header(file, size, elf64_ex->e_shoff);
+	}
+
+	if (IS_ERR(elf64_shdata)) {
+		retval = -EINVAL;
 		goto out_with_file;
 	}
 
 	/* Find signature section */
-	sig_orig = digsig_find_signature(elf_ex, elf_shdata, file, &sh_offset);
+	if (arch32)
+		sig_orig = digsig_find_signature32(
+				elf32_ex, (struct Elf32_Shdr *) elf64_shdata,
+				file, &sh_offset);
+	else
+		sig_orig = digsig_find_signature64(
+				elf64_ex, elf64_shdata, file, &sh_offset);
+
 	if (sig_orig == NULL) {
 		DSM_PRINT(DEBUG_SIGN,
 		"%s: Signature not found for the binary: %s !\n", 
@@ -571,7 +649,7 @@ static int digsig_file_mmap(struct file * file, unsigned long prot, unsigned lon
 	}
 
 	/* Verify binary's signature */
-	retval = digsig_verify_signature(elf_shdata, sig_orig, file, sh_offset);
+	retval = digsig_verify_signature(sig_orig, file, sh_offset);
 
 	if (!retval) {
 		DSM_PRINT(DEBUG_SIGN,
@@ -591,9 +669,9 @@ static int digsig_file_mmap(struct file * file, unsigned long prot, unsigned lon
 
 	kfree (sig_orig);
  out_free_shdata:
-	kfree (elf_shdata);
+	kfree (elf64_shdata);
  out_with_file:
-	kfree (elf_ex);
+	kfree (elf64_ex);
  out_file_no_buf:
  	if (allow_write_on_exit)
 		digsig_allow_write_access(file);
