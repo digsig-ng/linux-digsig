@@ -271,17 +271,17 @@ static ssize_t
 digsig_revoked_list_store (struct kobject *obj, struct attribute *attr, const char *buff, size_t count)
 {
         struct revoked_sig *tmp;
-        int rcount;
-                                                                                
+        int rcount = DSI_ELF_SIG_SIZE - DSI_BSIGN_INFOS - DSI_RSA_DATA_OFFSET;
+
         if (g_init)
                 return -EPERM;
-                                                                                
+
         if (count != DSI_ELF_SIG_SIZE) {
                 DSM_ERROR("digsig_revoked_list_store: Oops - count=%d, "
                           "sig size is %d\n", count, DSI_ELF_SIG_SIZE);
                 return -EINVAL;
         }
-                                                                                
+
         tmp = kmalloc(sizeof(struct revoked_sig), GFP_KERNEL);
         if (!tmp)
                 return -ENOMEM;
@@ -289,16 +289,16 @@ digsig_revoked_list_store (struct kobject *obj, struct attribute *attr, const ch
         tmp->sig = mpi_read_from_buffer(
 		buff + DSI_BSIGN_INFOS + DSI_RSA_DATA_OFFSET,
 		&rcount, 0);
-                                                                                
+
         list_add_tail(&tmp->next, &dsi_revoked_sigs);
-                                                                                
+
         DSM_PRINT(DEBUG_SIGN, "Added a revoked sig.\n");
         return count;
 }
-                                                                                
+
 static ssize_t
 digsig_revoked_list_show (struct kobject *obj, struct attribute *attr, char *buff)
 {
-                                                                                
+
         return 0;
 }

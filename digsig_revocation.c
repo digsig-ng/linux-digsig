@@ -73,7 +73,7 @@ int dsi_is_revoked_sig(char *buffer)
 	struct list_head *tmp;
 	struct revoked_sig *rsig;
 	char *tmp1 = buffer + DSI_BSIGN_INFOS + DSI_RSA_DATA_OFFSET;
-	int count;
+	int count = DSI_ELF_SIG_SIZE - DSI_BSIGN_INFOS - DSI_RSA_DATA_OFFSET;
 	int ret = 0;
 	MPI file_sig = mpi_read_from_buffer(tmp1, &count, 0);
 
