@@ -1,18 +1,12 @@
-Enhancements
-------------
-
-- Add tool to be able to extract the signature of a binary. 
-
-c.f. README
-
-Use tools/extract_sig (use a patched
-version of bsign for now) to extract the signature of each file into
-separate files under /etc/digsig_revoked_keys/.  For instance:
-
-$ ./tools/extract_sig /usr/sbin/sshd /etc/digsig_revoked_keys/sshd_v3.5p1
-$ ./tools/extract_sig /usr/sbin/in.ftpd /etc/digsig_revoked_keys/ftpd
-
-
+TO DO LIST (just a memo)
+------------------------
+=============================================================
+- Use standard Makefiles instead of a digsig.init script
+=============================================================
+- Add support for 2048-bit RSA keys
+=============================================================
+- Enhance the crypto commands with ASM code to speed up.
+=============================================================
 - Being able to sign the revocation list file, to protect it from
 being tempered with. 
 
@@ -52,6 +46,8 @@ long.
 Disadvantage: the security of the access to sysfs. But this is a
 problem we have anyway with loading the public key. 
 
+=============================================================
+
 - the authenticity of the public key: we need to be sure that the
 public key is really from the root's public key. 
 
@@ -60,6 +56,7 @@ Possible solutions:
 	use a certificate. Disadvantage of this solution is the need
 for a CA to sign the public key. 
 
+=============================================================
 - For time being, anybody with root privileges can use diginit to load
 a public key to the digisig. What happens if the attacker loads a
 false public key? Actually if this is really whatever, you could
@@ -91,6 +88,25 @@ module. The pass phrase is in clear text in the source code.
 
 take compiled_passphrase = sha1(pass).  Then when digsig is started,
 insist that sha1(user_pass) = compiled_passphrase.
+
+=============================================================
+
+THINGS THAT HAVE BEEN DONE (unless I'm wrong !)
+-----------------------------------------------
+- Add tool to be able to extract the signature of a binary. 
+
+c.f. README
+
+Use tools/extract_sig (use a patched
+version of bsign for now) to extract the signature of each file into
+separate files under /etc/digsig_revoked_keys/.  For instance:
+
+$ ./tools/extract_sig /usr/sbin/sshd /etc/digsig_revoked_keys/sshd_v3.5p1
+$ ./tools/extract_sig /usr/sbin/in.ftpd /etc/digsig_revoked_keys/ftpd
+
+
+
+
 
 Bugs -- High Priority
 ---------------------
