@@ -50,12 +50,12 @@ int main(int argc, char **argv)
 
 	/* Get pkey MPIs, one for 'n' and the other for 'e' */
 	pkey_file = open(argv[1], O_RDONLY);
-	if (!pkey_file) {
+	if (pkey_file < 0) {
 		printf ("Unable to open pkey_file %s %s\n", argv[1], strerror(errno));
 		return -1;
 	}
 	module_file = open ("/sys/digsig/key", O_WRONLY);
-	if (!module_file) {
+	if (module_file < 0) {
 		printf ("Unable to open module char device %s\n", strerror(errno));
 		return -1;
 	}
