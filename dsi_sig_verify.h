@@ -34,7 +34,7 @@
  * - digsig
  */
 
-#define DSI_BSIGN_VERSION    "0.4.4"
+#define DSI_BSIGN_VERSION    "0.4.5"
 #define DSI_BSIGN_STRING     "#1; bsign v" DSI_BSIGN_VERSION "\n"
 #define DSI_BSIGN_GREET_SIZE sizeof(DSI_BSIGN_STRING)-1
 #define DSI_BSIGN_HASH       20     /* sha1 hash */
@@ -55,6 +55,14 @@
 #define DSI_RSA_CLASS_OFFSET     5
 #define DSI_RSA_TIMESTAMP_OFFSET 6
 #define DSI_RSA_DATA_OFFSET      22
+
+
+/*ToDO: makan: this is a constraint, we suppose that the max size of a
+  big integer is 1024 bytes. This needs to be modified in order to
+  have a dynamic way of allocating memory. */ 
+
+#define DSI_MPI_MAX_SIZE_N 1024 
+#define DSI_MPI_MAX_SIZE_E 128 
                                                                                 
 
 /**
@@ -77,8 +85,7 @@ SIGCTX *dsi_sign_verify_init(int hashalgo, int signalgo);
 int dsi_sign_verify_update(SIGCTX *ctx, char *buf, int buflen);
 int dsi_sign_verify_final(SIGCTX *ctx, char *sig, int siglen /* PublicKey */, unsigned char *signed_hash );
 void dsi_sign_verify_free(void);
-
-void dsi_init_pkey();
+int dsi_init_pkey(char *pkey_file);
 
 /* TODO: makan: void dsi_init_pkey(char *pkey_file); */ 
 

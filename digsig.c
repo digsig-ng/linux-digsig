@@ -13,13 +13,14 @@
  *
  * Author: David Gordon Aug 2003 
  * modifs: Makan Pourzandi Sep 2003 
- * 
+ *         Vincent Roy Sep 2003 
  */
 
 
 #include <linux/init.h>
 #include <linux/config.h>
 #include <linux/module.h>
+#include <linux/moduleparam.h>
 #include <linux/kernel.h>
 #include <linux/security.h>
 #include <linux/netfilter.h>
@@ -28,6 +29,7 @@
 #include <linux/personality.h>
 #include <linux/elf.h>
 #include <linux/fs.h>
+#include <linux/namei.h>
 #include <asm/uaccess.h>
 #include <linux/security.h>
 
@@ -54,7 +56,9 @@ extern MPI *dsi_public_key[2];
 /* Allocate and free functions for each kind of security blob. */
 static spinlock_t dsi_bprm_alloc_lock = SPIN_LOCK_UNLOCKED;
 
-int DSIDebugLevel = DEBUG_SYS_SECURITY | DEBUG_INIT | DEBUG_SIGN;
+static char *pkey_file = NULL;
+
+int DSIDebugLevel = DEBUG_SYS_SECURITY | DEBUG_SIGN;
 struct security_operations dsi_security_ops;
 
 #define set_dsi_ops(ops, function)				\
@@ -167,7 +171,7 @@ dsi_verify_signature(char *filename, Elf32_Shdr * elf_shdata, char *sig_orig, st
   /* Get file size from file system */
   old_fs = get_fs();
   set_fs(get_ds());
-  retval = vfs_lstat(filename, &stat);
+  retval = vfs_stat(filename, &stat);
   set_fs(old_fs);
 
   if (retval) {
@@ -290,32 +294,35 @@ dsi_bprm_check_security(struct linux_binprm *bprm)
   elf_ex = *((struct elfhdr *) bprm->buf);
   
   if (memcmp(elf_ex.e_ident, ELFMAG, SELFMAG) != 0) {
-    DSM_ERROR("dsi_bprm_compute_creds Binary is not elf format\n");
-    retval = DIGSIG_MODE;
+    DSM_PRINT(DEBUG_SIGN, "dsi_bprm_compute_creds: Binary is not elf format\n");
+    retval = 0; // ToDO: Makan, we decide to let go the not elf binaries.
+    // ?? This is not obvious, we cannot sign a non-elf binary, should
+    // we only check elf files and not execute the non-elf
+    // binaries????
     goto out_file;
   }
   
   if (elf_ex.e_type != ET_EXEC && elf_ex.e_type != ET_DYN) {
-    DSM_ERROR("dsi_bprm_compute_creds Binary is not executable\n");
-    retval = DIGSIG_MODE;
+    DSM_PRINT(DEBUG_SIGN, "dsi_bprm_compute_creds: Binary is not executable\n");
+    retval = 0; // ToDO: Makan, we decide to let go the not executable binaries. 
     goto out_file;
   }
 
   /* Now read in all of the section header entries */
   if (!elf_ex.e_shoff) {
-    DSM_ERROR("dsi_bprm_compute_creds No section header\n");
+    DSM_ERROR("dsi_bprm_compute_creds: No section header!\n");
     retval = DIGSIG_MODE;
     goto out_file;
   }
 
   if (elf_ex.e_shentsize != sizeof(Elf32_Shdr)) {
-    DSM_ERROR("dsi_bprm_compute_creds Section header is wrong size\n");
+    DSM_ERROR("dsi_bprm_compute_creds: Section header is wrong size!\n");
     retval = DIGSIG_MODE;
     goto out_file;
   }
 
   if (elf_ex.e_shnum > 65536U / sizeof(Elf32_Shdr)) {
-    DSM_ERROR("dsi_bprm_compute_creds Too many entries in Section Header\n");
+    DSM_ERROR("dsi_bprm_compute_creds: Too many entries in Section Header!\n");
     retval = DIGSIG_MODE;
     goto out_file;
   }
@@ -327,7 +334,7 @@ dsi_bprm_check_security(struct linux_binprm *bprm)
   spin_unlock_irqrestore(&dsi_bprm_alloc_lock, flags);
 
   if (!elf_shdata) {
-    DSM_ERROR("dsi_bprm_compute_creds Cannot allocate memory to read Section Header\n");
+    DSM_ERROR("dsi_bprm_compute_creds: Cannot allocate memory to read Section Header\n");
     retval = DIGSIG_MODE;
     goto out_file;
   }
@@ -335,7 +342,7 @@ dsi_bprm_check_security(struct linux_binprm *bprm)
   retval = kernel_read(file, elf_ex.e_shoff, (char *) elf_shdata, size);
 
   if (retval < 0 || retval != size) {
-    DSM_ERROR("dsi_bprm_compute_creds Unable to read binary %s: %d\n", bprm->filename, retval);
+    DSM_ERROR("dsi_bprm_compute_creds: Unable to read binary %s: %d\n", bprm->filename, retval);
     kfree(elf_shdata);
     retval = DIGSIG_MODE;
     goto out_file;
@@ -343,7 +350,8 @@ dsi_bprm_check_security(struct linux_binprm *bprm)
 
   /* Find signature section */
   if ((sig_orig = dsi_find_signature(&elf_ex, elf_shdata, file, &sh_offset)) == NULL) {
-    kfree(sig_orig);     /* sig_orig now points to allocated memory after internal_find_signature */
+    kfree(sig_orig);     /* sig_orig now points to allocated memory
+			    after internal_find_signature */
     retval = DIGSIG_MODE;
     goto out_file;
   }
@@ -355,10 +363,10 @@ dsi_bprm_check_security(struct linux_binprm *bprm)
     DSM_PRINT(DEBUG_SIGN, "dsi_bprm_compute_creds: Signature verification successful\n");
   } else if (retval > 0) {
     DSM_PRINT(DEBUG_SIGN, "dsi_bprm_compute_creds: Signatures do not match\n");
-    retval = DIGSIG_MODE;
+    retval = -1;
   } else {
     DSM_PRINT(DEBUG_SIGN, "dsi_bprm_compute_creds: Signature verification failed because of errors: %d\n", retval);
-    retval = DIGSIG_MODE;
+    retval = -1;
   }
 
   kfree(sig_orig);
@@ -375,28 +383,45 @@ void security_set_operations(struct security_operations *ops)
   set_dsi_ops(ops, bprm_check_security);
 }
 
-  /* TODO: makan: char *file_name; paramer_module(file_name); */ 
+
+module_param(pkey_file, charp, 000);
 
 static int __init digsig_init_module(void)
 {
-  int err = 0;
+	int err = 0;
+	struct nameidata nd;
 
-  DSM_PRINT(DEBUG_INIT, "Initializing module\n");
-  /* Initialize public key */
+	DSM_PRINT(DEBUG_INIT, "Initializing module\n");
+	/* Initialize public key */
 
-  /* TODO: makan: dsi_init_pkey(file_name);*/ 
-  dsi_init_pkey();
+	DSM_PRINT(DEBUG_SIGN, "Public key in %s\n", pkey_file);
+	if (pkey_file == NULL) {
+		DSM_ERROR ("digsig: Invalid file name ! \n");	  
+		return -1;
+	}
 
-  /* initialize DSI's hooks */
-  security_set_operations(&dsi_security_ops);
+	if (path_lookup(pkey_file, LOOKUP_FOLLOW, &nd)){
+		DSM_ERROR ("digsig: File does not exist %s ! \n", pkey_file);
+		return -1;
+	}
 
-  /* register */
-  if ((err = register_security(&dsi_security_ops))) {
-    DSM_ERROR("< dsi_init_module():Wrong security parameter\n");
-    return err;
-  }
-	
-  return 0;
+	DSM_PRINT(DEBUG_SIGN, "Public key in %s\n", pkey_file);
+
+	if (dsi_init_pkey (pkey_file)) {
+		DSM_ERROR ("Error in dsi_init_pkey\n");
+		return -1;
+	}
+
+	/* initialize DSI's hooks */
+	security_set_operations(&dsi_security_ops);
+
+	/* register */
+	if ((err = register_security(&dsi_security_ops))) {
+		DSM_ERROR("< dsi_init_module():Wrong security parameter\n");
+		return err;
+	}
+
+	return 0;
 }
 
 static void __exit digsig_exit_module(void)
