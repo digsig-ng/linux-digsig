@@ -1,9 +1,10 @@
 Release of digsig.0.2
+====================== 
 
-We implemented a kernel module for 2.5.66 which checks signatures
-before running a binary.  The main goal is to insert digital
-signatures inside the ELF binary and verify this signature before
-loading the binary. It is based on the LSM hooks. 
+This kernel module checks signature of a binary before running it.
+The main functionality is to insert digital signatures inside the ELF
+binary and verify this signature before loading the binary. It is
+based on the LSM hooks.
 
 It has been added to DSI's CVS. In order to simplify its use, it is
 available either as part of the DSI package, or in a standalone
@@ -16,17 +17,20 @@ feedback about dsi project :-)).
 Our approach has been to use the existing solutions like gpg and bsign
 rather than reinventing the whole thing from scratch.
 
-However, in order to reduce the overhead in the kernel, we took only the
-minimum code necessary from GPG. We took only the MPI (Multi Precision
-Integer) source code and the RSA crypto source code. This helped much
-to reduce the amount of code imported to the kernel in sourc code of
-the original (only 1/10 of the original gnupg 1.2.2 sourc code has
-been imported to the kernel module). On the other hand, we avoided
-OpenSSL source code for the fact that the licensing was not clear to
-us. We did some tests at user level and found out that OpenSSL is 4
-times faster than GPG regarding RSA verification. As a future
-direction, we plan to clarify this licensing issue and use OpenSSL
-instead of GPG.
+However, in order to reduce the overhead in the kernel, we took only
+the minimum code necessary from GPG. We took only the MPI (Multi
+Precision Integer) source code and the RSA crypto source code. This
+helped much to reduce the amount of code imported to the kernel in
+sourc code of the original (only 1/10 of the original gnupg 1.2.2
+sourc code has been imported to the kernel module). On the other hand,
+we avoided OpenSSL source code for the fact that the licensing was not
+clear to us. We did some tests at user level and found out that
+OpenSSL is 4 times faster than GPG regarding RSA verification. As a
+future direction, we plan to clarify this licensing issue and use (if
+possible) OpenSSL instead of GPG.
+
+Another new direction under investigation is to use the Tom St-denis's
+crypto library at http://math.libtomcrypt.org/.
 
 Requirements:
 ==============
@@ -43,11 +47,37 @@ Performances
 
 This is release 0.2. We have done some benchmarks. 
 
+Macro tests: 
+
 We ran lmbench on a Pentium IV, 2.4 GHz, 500 mega bytes of memory,
 running Linux 2.5.66. Our benchmarks show that the execution time
 (exec function call) multiplies by a factor of 4 when the module is
 loaded (no changes for fork call, as the binary is not loaded into
 memory).
+
+Micro tests: 
+
+We present below the overhead at kernel-level for checking the
+signature.
+
+Always on a Pentium IV, 2.4 GHz, 500 mega bytes of memory, running
+Linux 2.5.66: 
+
+Executable         size         time
+======================================= 
+ls                 67668         1.75
+ps                 69772         1.8
+ssh                227256        4.1
+bash               626028        9.35
+vim                1893740       27.3
+emacs              4093052       57.85
+
+Time is in jiffies -> 1 jiffies = 1ms
+
+
+Linear regression
+time = 1.393899E-5 * size + 0.815081 
+
 
 A Very simple scenraio to show how to use it  
 =======================================
@@ -127,6 +157,9 @@ bash: ./ps-makan-colby: Operation not permitted
 [root@colby digsig-dev]# ./digsig.init stop
 Unloading Digsig.
 
+Acknowledgements
+================= 
+
 This work has been done by (alphabetical order) 
 
 A Apvrille (axelle.apvrille@ericsson.ca),
@@ -134,7 +167,7 @@ D Gordon (davidgordonca@yahoo.ca),
 M Pourzandi (makan.pourzandi@ericsson.ca),
 V Roy (vincent.roy@ericsson.ca).
 
-Special merits go to David who wrote big chunks of the source code.
+Thanks to Radu Filip who has done the initial analysis. 
 
 Thanks to Marc Springer who helped us with the use of Bsign. 
 
