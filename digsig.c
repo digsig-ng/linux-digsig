@@ -446,16 +446,16 @@ read_section_header(struct file *file, int sh_size, int sh_off)
 	if (!elf_shdata) {
 		DSM_ERROR("%s: Cannot allocate memory to read Section Header\n",
 			  __FUNCTION__);
-		return NULL;
+		return ERR_PTR(-ENOMEM);
 	}
 
 	retval = kernel_read(file, sh_off, (char *)elf_shdata, sh_size);
 
 	if (retval < 0 || retval != sh_size) {
-		DSM_ERROR("%s: Unable to read binary %s: %d\n", __FUNCTION__,
-			  file->f_dentry->d_name.name, retval);
+		DSM_ERROR("%s: Unable to read binary %s (offset %d size %d): %d\n", __FUNCTION__,
+			  file->f_dentry->d_name.name, sh_off, sh_size, retval);
 		kfree(elf_shdata);
-		return NULL;
+		return ERR_PTR(-EINVAL);
 	}
 	return elf_shdata;
 }
@@ -554,8 +554,10 @@ static int digsig_file_mmap(struct file * file, unsigned long prot, unsigned lon
 
 	size = elf_ex->e_shnum * sizeof(Elf32_Shdr);
 	elf_shdata = read_section_header(file, size, elf_ex->e_shoff);
-	if (IS_ERR(elf_shdata))
+	if (IS_ERR(elf_shdata)) {
+		retval=-EINVAL;
 		goto out_with_file;
+	}
 
 	/* Find signature section */
 	sig_orig = digsig_find_signature(elf_ex, elf_shdata, file, &sh_offset);
