@@ -1461,7 +1461,7 @@ extern
 const
 #endif
 unsigned char __clz_tab[];
-#define MPI_INTERNAL_NEED_CLZ_TAB
+#define MPI_INTERNAL_NEED_CLZ_TAB 1
 #define count_leading_zeros(count, x) \
   do {									\
     UWtype __xr = (x);							\

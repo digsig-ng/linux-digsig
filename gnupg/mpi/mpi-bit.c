@@ -21,7 +21,6 @@
 #include "mpi-internal.h"
 #include "longlong.h"
 
-#define MPI_INTERNAL_NEED_CLZ_TAB
 #ifdef MPI_INTERNAL_NEED_CLZ_TAB
 #ifdef __STDC__
 const
