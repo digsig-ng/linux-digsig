@@ -270,7 +270,7 @@ int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 
 	if (!file)
 		return 0;
-	if (!(prot & (S_IXUSR | S_IXGRP | S_IXOTH)))
+	if (!(prot & VM_EXEC))
 		return 0;
 	if (!file->f_dentry)
 		return 0;
@@ -286,7 +286,7 @@ int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 		return 0;
 	}
 
-	if (DSIDebugLevel & DEBUG_TIME)	/* measure exec time only on DEBUG mode. */
+	if (DIGSIG_BENCH)	/* measure exec time only on DEBUG mode. */
 		exec_time = jiffies;
 
 	DSM_PRINT(DEBUG_SIGN, "binary is %s\n", file->f_dentry->d_name.name);
@@ -378,7 +378,7 @@ int dsi_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
 	kfree(sig_orig);
 
  out_file:
-	if (DSIDebugLevel & DEBUG_TIME) {	/* measure exec time only on DEBUG mode. */
+	if (DIGSIG_BENCH) {	/* measure exec time only on DEBUG mode. */
 		exec_time = jiffies - exec_time;
 		total_jiffies += exec_time;
 		DSM_PRINT(DEBUG_TIME, "Time to execute dsi_file_mmap on %s is %li\n", file->f_dentry->d_name.name, exec_time);
