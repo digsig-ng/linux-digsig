@@ -47,7 +47,7 @@ case "$1" in
 	echo "Catting revoked sigs into revocation list"
 	if [ -d $REVKEY_DIR ]; then
 		for name in `/bin/ls $REVKEY_DIR`; do
-			/bin/cat $REVKEY_DIR/$name > /sys/digsig/digsig_revoke
+			/bin/cat $REVKEY_DIR/$name > /sys/digsig/revoke
 		done
 	fi
 	echo "Loading public key."	
