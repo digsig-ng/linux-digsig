@@ -13,6 +13,7 @@
  * Authors: Axelle Apvrille
  *          David Gordon Aug 2003 
  * modifs:  Makan Pourzandi Sep 2003 
+ *          Chris Wright    Sep 2004
  */
 
 #include <linux/string.h>

@@ -13,6 +13,7 @@
  *
  * Author: Serge Hallyn Nov 2003, Jan 2004: add caching of signature validation
  * modifs: Makan Pourzandi Mar 2004 
+ *         Chris Wright    Sep 2004 
  *         
  */
 

@@ -14,7 +14,8 @@
  *      (at your option) any later version.
  * 
  * Author: David Gordon Aug 2003 
- * Modifs: Vincent Roy Sept 2003 
+ * Modifs: Vincent Roy  Sep 2003 
+ *         Chris Wright Sep 2004
  */
 
 #include <stdio.h>

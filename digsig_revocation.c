@@ -14,6 +14,7 @@
  *      (at your option) any later version.
  *
  * Author: Serge Hallyn Mar 2004
+ * modifs: Chris Wright Sept 2004 
  */
 
 #include <linux/moduleparam.h>
