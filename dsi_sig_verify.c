@@ -25,8 +25,6 @@
 #include "gnupg/cipher/rsa-verify.h"
 #include "dsi_sig_verify.h"
 
-#include "dsi_extract_mpi.h"
-
 /*
  * Public key format: 2 MPIs
  * 2 bytes: length of 1st MPI (ie. 0x0400)
@@ -73,26 +71,20 @@ Parameters  :
 Return value: a signature context valid for this signature only
 ******************************************************************************/
 
-static spinlock_t dsi_crypto_alloc_lock = SPIN_LOCK_UNLOCKED;
-
 SIGCTX *dsi_sign_verify_init(int hashalgo, int signalgo)
 {
 	SIGCTX *ctx;
-	unsigned long flags;
 
 	/* allocating signature context */
-	spin_lock_irqsave(&dsi_crypto_alloc_lock, flags);
+
 	ctx = (SIGCTX *) kmalloc(sizeof(SIGCTX), GFP_KERNEL);
-	spin_unlock_irqrestore(&dsi_crypto_alloc_lock, flags);
 
 	if (ctx == NULL) {
 		DSM_ERROR("Cannot allocate ctx\n");
 		return NULL;
 	}
 
-	spin_lock_irqsave(&dsi_crypto_alloc_lock, flags);
 	ctx->tvmem = kmalloc(TVMEMSIZE, GFP_KERNEL);
-	spin_unlock_irqrestore(&dsi_crypto_alloc_lock, flags);
 
 	if (ctx->tvmem == NULL) {
 		kfree(ctx);
@@ -144,8 +136,9 @@ int dsi_sign_verify_update(SIGCTX * ctx, char *buf, int buflen)
 {
 	switch (ctx->digestAlgo) {
 	case HASH_SHA1:
-		if (ctx == NULL)
+		if (ctx == NULL) {
 			return -1;
+		}
 
 		dsi_sha1_update(ctx, buf, buflen);
 		break;
@@ -171,15 +164,15 @@ dsi_sign_verify_final(SIGCTX * ctx, char *sig, int siglen /* PublicKey */ ,
 
 	/* TO DO: check the length of the signature: it should be equal to the length
 	   of the modulus */
-
 	if ((rc = dsi_sha1_final(ctx, digest)) < 0) {
 		DSM_ERROR
 		    ("dsi_sign_verify_final Cannot finalize hash algorithm\n");
 		return rc;
 	}
 
-	if (siglen < gDigestLength[ctx->digestAlgo])
+	if (siglen < gDigestLength[ctx->digestAlgo]) {
 		return -2;
+	}
 	memcpy(sig, digest, gDigestLength[ctx->digestAlgo]);
 
 	switch (ctx->digestAlgo) {
@@ -213,7 +206,6 @@ void dsi_sign_verify_free()
 		crypto_free_tfm(SHA1_TFM);
 		SHA1_TFM = NULL;
 	}
-
 	/* this might cause unpredictable behavior if structures are refering to this,
 	   their pointer might suddenly become NULL, might need a usage count associated */
 }
@@ -274,7 +266,6 @@ int dsi_rsa_bsign_verify(unsigned char *hash_format, int length,
 	int nframe;
 	unsigned char sig_class;
 	unsigned char sig_timestamp[SIZEOF_UNSIGNED_INT];
-	unsigned long flags;
 	int i;
 	SIGCTX *ctx = NULL;
 	unsigned char new_sig[gDigestLength[HASH_SHA1]];
@@ -291,18 +282,14 @@ int dsi_rsa_bsign_verify(unsigned char *hash_format, int length,
 	/* bsign modif: add bsign greet at beginning */
 	/* gpg modif:   add class and timestamp at end */
 
-	spin_lock_irqsave(&dsi_crypto_alloc_lock, flags);
 	ctx = (SIGCTX *) kmalloc(sizeof(SIGCTX), GFP_KERNEL);
-	spin_unlock_irqrestore(&dsi_crypto_alloc_lock, flags);
 
 	if (ctx == NULL) {
 		DSM_ERROR("Cannot allocate ctx\n");
 		return -1;
 	}
 
-	spin_lock_irqsave(&dsi_crypto_alloc_lock, flags);
 	ctx->tvmem = kmalloc(TVMEMSIZE, GFP_KERNEL);
-	spin_unlock_irqrestore(&dsi_crypto_alloc_lock, flags);
 
 	if (ctx->tvmem == NULL) {
 		kfree(ctx);
@@ -320,8 +307,9 @@ int dsi_rsa_bsign_verify(unsigned char *hash_format, int length,
 		    signed_hash[DSI_RSA_TIMESTAMP_OFFSET + i] & 0xff;
 	}
 
-	if (ctx == NULL)
+	if (ctx == NULL) {
 		return -1;
+	}
 
 	dsi_sha1_update(ctx, DSI_BSIGN_STRING, DSI_BSIGN_GREET_SIZE);
 	dsi_sha1_update(ctx, hash_format, SHA1_DIGEST_LENGTH);
@@ -346,7 +334,6 @@ int dsi_rsa_bsign_verify(unsigned char *hash_format, int length,
 
 	m_free(hash);
 	m_free(data);
-
 	return rc;
 }
 

@@ -50,7 +50,7 @@ ssize_t dsi_write(struct file *filp, const char *buff, size_t count,
 		  loff_t * offp)
 {
 
-	int i;
+/*	int i;*/
 	if (g_init)		// do not accept to re-initialize the module with
 		// new public key. This avoids many coherency
 		// problem when updating jeys while checking the

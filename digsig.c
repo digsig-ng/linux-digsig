@@ -56,6 +56,8 @@ extern MPI *dsi_public_key[2];
 
 /* Allocate and free functions for each kind of security blob. */
 static spinlock_t dsi_bprm_alloc_lock = SPIN_LOCK_UNLOCKED;
+static struct semaphore dsi_digsig_sem;
+
 extern int device_file_major;
 struct file_operations dsi_fops = {
 	owner:THIS_MODULE,
@@ -107,7 +109,6 @@ static char *dsi_find_signature(struct elfhdr *elf_ex,
 {
 	int i = 0;
 	int retval;
-	unsigned long flags;
 	char *buffer = NULL;
 
 	i = 0;
@@ -131,10 +132,8 @@ static char *dsi_find_signature(struct elfhdr *elf_ex,
 			return NULL;
 		}
 
-		spin_lock_irqsave(&dsi_bprm_alloc_lock, flags);
 		buffer =
 		    (char *) kmalloc(DSI_ELF_SIG_SIZE, DSI_SAFE_ALLOC);
-		spin_unlock_irqrestore(&dsi_bprm_alloc_lock, flags);
 
 		if (!buffer) {
 			DSM_PRINT(DEBUG_SIGN,
@@ -179,7 +178,6 @@ dsi_verify_signature(char *filename, Elf32_Shdr * elf_shdata,
 	struct kstat stat;
 	unsigned int size;
 	unsigned int lower, upper;
-	unsigned long flags;
 	SIGCTX *ctx;
 
 	/* Get file size from file system */
@@ -195,21 +193,22 @@ dsi_verify_signature(char *filename, Elf32_Shdr * elf_shdata,
 		return -ENOENT;
 	}
 
+	down (&dsi_digsig_sem);
 	if ((ctx = dsi_sign_verify_init(HASH_SHA1, SIGN_RSA)) == NULL) {
 		DSM_PRINT(DEBUG_SIGN,
 			  "dsi_bprm_compute_creds Cannot allocate crypto context.\n");
+		up (&dsi_digsig_sem);
 		return -ENOMEM;
 	}
 
-	spin_lock_irqsave(&dsi_bprm_alloc_lock, flags);
 	sig_result = (char *) kmalloc(DSI_ELF_SIG_SIZE, DSI_SAFE_ALLOC);
 	read_blocks =
 	    (char *) kmalloc(DSI_ELF_READ_BLOCK_SIZE, DSI_SAFE_ALLOC);
-	spin_unlock_irqrestore(&dsi_bprm_alloc_lock, flags);
 
 	if (!sig_result || !read_blocks) {
 		DSM_PRINT(DEBUG_SIGN,
 			  "dsi_bprm_compute_creds Cannot allocate memory for buffers.\n");
+		up (&dsi_digsig_sem);
 		return -ENOMEM;
 	}
 
@@ -227,6 +226,7 @@ dsi_verify_signature(char *filename, Elf32_Shdr * elf_shdata,
 				  size);
 			kfree(sig_result);
 			kfree(read_blocks);
+			up (&dsi_digsig_sem);
 			return -1;
 		}
 
@@ -252,6 +252,7 @@ dsi_verify_signature(char *filename, Elf32_Shdr * elf_shdata,
 				  "dsi_bprm_compute_creds Error updating crypto verification\n");
 			kfree(sig_result);
 			kfree(read_blocks);
+			up (&dsi_digsig_sem);
 			return -1;
 		}
 	}
@@ -264,11 +265,13 @@ dsi_verify_signature(char *filename, Elf32_Shdr * elf_shdata,
 			  "dsi_bprm_compute_creds Error calculating final crypto verification\n");
 		kfree(sig_result);
 		kfree(read_blocks);
+		up (&dsi_digsig_sem);
 		return -1;
 	}
 
 	kfree(sig_result);
 	kfree(read_blocks);
+	up (&dsi_digsig_sem);
 	return retval;
 }
 
@@ -313,7 +316,6 @@ int dsi_bprm_check_security(struct linux_binprm *bprm)
 		exec_time = jiffies;
 
 	DSM_PRINT(DEBUG_SIGN, "binary is %s\n", bprm->filename);
-
 	file = filp_open(bprm->filename, O_RDONLY, 0);
 	if (!file && IS_ERR(file)) {
 		DSM_ERROR
@@ -415,8 +417,7 @@ int dsi_bprm_check_security(struct linux_binprm *bprm)
 		DSM_PRINT(DEBUG_SIGN,
 			  "dsi_bprm_compute_creds: Signature verification successful\n");
 	} else if (retval > 0) {
-		DSM_PRINT(DEBUG_SIGN,
-			  "dsi_bprm_compute_creds: Signatures do not match\n");
+		DSM_ERROR("dsi_bprm_compute_creds: Signatures do not match for %s\n", bprm->filename);
 		retval = -EPERM;
 	} else {
 		DSM_PRINT(DEBUG_SIGN,
@@ -430,10 +431,10 @@ int dsi_bprm_check_security(struct linux_binprm *bprm)
       out_file:
 	filp_close(file, 0);
 
-	if (!DIGSIG_MODE)	// measure exec time only on DEBUG mode. 
+	if (!DIGSIG_MODE) {	// measure exec time only on DEBUG mode. 
 		exec_time = jiffies - exec_time;
-	/* DSM_PRINT(DEBUG_SIGN, "Time to execute dsi_bprm_check_security on %s is %li\n", bprm->filename, exec_time); */
-
+		DSM_PRINT(DEBUG_SIGN, "Time to execute dsi_bprm_check_security on %s is %li\n", bprm->filename, exec_time);
+	}
 	return retval;
 }
 
@@ -468,6 +469,7 @@ static int __init digsig_init_module(void)
 		    ("< dsi_init_module(): Can't get a device major number\n");
 		return device_file_major;
 	}
+	init_MUTEX (&dsi_digsig_sem);
 
 	return 0;
 }

@@ -97,7 +97,10 @@ int main(int argc, char **argv)
 	}
 	printf("}\n");
 	*/ 
-	write (module_file, key, key_offset);
+	if (write (module_file, key, key_offset) < 0) {
+		printf ("Write problem %i %s\n", errno, strerror (errno));
+		return -1;
+	}
 
 	key_offset = 0;
 	key[key_offset++] = 'e';
@@ -127,7 +130,10 @@ int main(int argc, char **argv)
 	}
 	printf("}\n");
 	*/ 
-	write (module_file, key, key_offset);
+	if (write (module_file, key, key_offset) < 0) {
+		printf ("Write problem %i %s\n", errno, strerror (errno));
+		return -1;
+	}
 
 	return 0;
 }
