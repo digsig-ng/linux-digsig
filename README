@@ -30,8 +30,10 @@ REQUIREMENTS
 
 To compile:
 	you need a Linux kernel 2.5.66 or greater
-	your kernel must be compiled with th CONFIG_SECURITY option 
-		set to Y.
+	your kernel must be compiled with:
+		CONFIG_SECURITY=Y
+		CONFIG_SHA1=Y (or m, but then load the sha1 module first
+				before DigSig !).
 	you do NOT need DSI: DigSig is an independant project
 		though it historically uses DSI's CVS.
 
@@ -81,52 +83,6 @@ module insertion line from
   /sbin/insmod -f ./digsig_verif.ko || exit 1
 to
   /sbin/insmod -f ./digsig_verif.ko digsig_max_cached_sigs=1024 || exit 1
-
-Performances
-=============== 
-
-We have done some benchmarks without caching. Remark that 
-the performance impact is small after the first load of the binary as  
-the signature of the file is cached in the memory.   
-
-Macro tests: 
-
-We ran lmbench on a Pentium IV, 2.4 GHz, 500 mega bytes of memory,
-running Linux 2.5.66. Our benchmarks show that the execution time
-(exec function call) multiplies by a factor of 4 when the module is
-loaded (no changes for fork call, as the binary is not loaded into
-memory).
-
-Micro tests with gnupg: 
-
-We present below the overhead at kernel-level for checking the
-signature.
-
-In below, we give the performances for DigSig running with the
-variable DSI_EXEC_ONLY set. This means that we only measure the time
-for verifying the signature of the executable binary and do not take
-into accoubt the time necessary to verify the signatures for the
-shared libraries. 
-
-Always on a Pentium IV, 2.4 GHz, 500 mega bytes of memory, running
-Linux 2.5.66: 
-
-+-----------+---------+----------+
-| Binaries  |   Size  |  GnuPG   |
-+-----------+---------+----------+
-|        ls |   68230 |  1.61765 |
-|        ps |   70337 |  1.67742 |
-|   busybox |  248801 |  4.66666 |
-|       cvs |  672532 | 11.53571 |
-|       vim | 1894305 | 31.25000 |
-|     emacs | 4093614 | 67.41176 |
-+-----------+---------+----------+
-
-Time is in jiffies -> 1 jiffies = 1ms
-
-
-Linear regression
-time = 1.393899E-5 * size + 0.815081 
 
 Caching support 
 ================ 
@@ -198,7 +154,7 @@ first tries (see -DDIGSIG_DEBUG in the Makefile). In
 this mode, the module verifies the signatures but does not enforce the
 security (if not any signature present in your binary, you'll have a
 message in /var/log/messages but the execution is not
-aborted.). However, the execution of the bianaries with invalid
+aborted.). However, the execution of the binaries with invalid
 signatures is aborted. Once, you're sure of your binary signature
 procedure you can recompile the whole on non-debug mode.
 
@@ -250,6 +206,52 @@ bash: ./ps-makan-colby: Operation not permitted
 
 [root@colby digsig-dev]# ./digsig.init stop
 Unloading Digsig.
+
+Performances
+=============== 
+
+We have done some benchmarks without caching. Remark that 
+the performance impact is small after the first load of the binary as  
+the signature of the file is cached in the memory.   
+
+Macro tests: 
+
+We ran lmbench on a Pentium IV, 2.4 GHz, 500 mega bytes of memory,
+running Linux 2.5.66. Our benchmarks show that the execution time
+(exec function call) multiplies by a factor of 4 when the module is
+loaded (no changes for fork call, as the binary is not loaded into
+memory).
+
+Micro tests with gnupg: 
+
+We present below the overhead at kernel-level for checking the
+signature.
+
+In below, we give the performances for DigSig running with the
+variable DSI_EXEC_ONLY set. This means that we only measure the time
+for verifying the signature of the executable binary and do not take
+into accoubt the time necessary to verify the signatures for the
+shared libraries. 
+
+Always on a Pentium IV, 2.4 GHz, 500 mega bytes of memory, running
+Linux 2.5.66: 
+
++-----------+---------+----------+
+| Binaries  |   Size  |  GnuPG   |
++-----------+---------+----------+
+|        ls |   68230 |  1.61765 |
+|        ps |   70337 |  1.67742 |
+|   busybox |  248801 |  4.66666 |
+|       cvs |  672532 | 11.53571 |
+|       vim | 1894305 | 31.25000 |
+|     emacs | 4093614 | 67.41176 |
++-----------+---------+----------+
+
+Time is in jiffies -> 1 jiffies = 1ms
+
+
+Linear regression
+time = 1.393899E-5 * size + 0.815081 
 
 Acknowledgements
 ================= 
