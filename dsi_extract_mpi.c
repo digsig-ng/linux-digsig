@@ -66,13 +66,13 @@ int dsi_get_pkey(unsigned char *raw_public_key_n,
 
 	kernel_read(fd, offset++, &c, 1);
 	raw_public_key_n[0] = c;
-	printk("%#x, ", c & 0xff);
+	DSM_PRINT_NO_PREFIX (DEBUG_SIGN, "%#x, ", c & 0xff);
 	len = c << 8;
 
 	kernel_read(fd, offset++, &c, 1);
 	raw_public_key_n[1] = c;
 	len |= c;
-	printk("%#x, ", c & 0xff);
+	DSM_PRINT_NO_PREFIX (DEBUG_SIGN, "%#x, ", c & 0xff);
 	len = (len + 7) / 8;
 
 	if (len > DSI_ELF_SIG_SIZE) {
@@ -84,21 +84,21 @@ int dsi_get_pkey(unsigned char *raw_public_key_n,
 	for (i = 0; i < len; i++) {
 		kernel_read(fd, offset++, &c, 1);
 		raw_public_key_n[i + 2] = c;
-		printk("%#x, ", c & 0xff);
+		DSM_PRINT_NO_PREFIX (DEBUG_SIGN, "%#x, ", c & 0xff);
 	}
 
-	printk("}\n");
+	DSM_PRINT_NO_PREFIX (DEBUG_SIGN, "}\n");
 
 	DSM_PRINT(DEBUG_SIGN, "pkey->e MPI:\n{ ");
 	kernel_read(fd, offset++, &c, 1);
 	raw_public_key_e[0] = c;
-	printk("%#x, ", c & 0xff);
+	DSM_PRINT_NO_PREFIX (DEBUG_SIGN, "%#x, ", c & 0xff);
 	len = c << 8;
 
 	kernel_read(fd, offset++, &c, 1);
 	raw_public_key_e[1] = c;
 	len |= c;
-	printk("%#x, ", c & 0xff);
+	DSM_PRINT_NO_PREFIX (DEBUG_SIGN, "%#x, ", c & 0xff);
 	len = (len + 7) / 8;
 
 	if (len > DSI_ELF_SIG_SIZE) {
@@ -109,10 +109,10 @@ int dsi_get_pkey(unsigned char *raw_public_key_n,
 
 	for (i = 0; i < len; i++) {
 		kernel_read(fd, offset++, &c, 1);
-		printk("%#x, ", c & 0xff);
+		DSM_PRINT_NO_PREFIX (DEBUG_SIGN, "%#x, ", c & 0xff);
 		raw_public_key_e[i + 2] = c;
 	}
-	printk("}\n");
+	DSM_PRINT_NO_PREFIX (DEBUG_SIGN, "}\n");
 	filp_close(fd, 0);
 
 	return 0;
