@@ -214,19 +214,24 @@ Return value:
 ******************************************************************************/
 static int
 del_hashes(int num)
-{
+{			
 	int i=0;
 	struct digsig_hash_struct *tmph, *del;
+
+	DSM_PRINT(DEBUG_SIGN,	"del_hashes: num deleted %d\n", num); 
 
 	while (i < max_hashed_sigs && i<num) {
 		i++;
 		tmph = list_entry(digsig_hash_lru.next, struct digsig_hash_struct, lru);
 
 		if (!tmph->orig) {
+
+			DSM_PRINT(DEBUG_SIGN,	"del_hashes: deleted tmph->orig=%d\n", (int) tmph->orig); 
 			tmph->prev->next = tmph->next;
 			if (tmph->next)
 				tmph->next->prev = tmph->prev;
 			list_del(&tmph->lru);
+
 			kfree(tmph);
 			continue;
 		}
@@ -234,12 +239,18 @@ del_hashes(int num)
 		/* this came off the original array */
 		if (tmph->next) {
 			/* It has a next->, so we delete that one */
+
+		  DSM_PRINT(DEBUG_SIGN,	"del_hashes: deleted tmph->next=%d\n", (int) tmph->next); 
 			del = tmph->next;
 			tmph->inode = del->inode;
-			tmph->next = tmph->next->next;
-			if (tmph->next)
-				tmph->next->prev = tmph;
+
+			tmph->next = del->next; 
+
+			if (del->next)
+			  del->next->prev = tmph; 
+
 			list_del(&del->lru);
+
 			kfree(del);
 			continue;
 		}
@@ -249,6 +260,8 @@ del_hashes(int num)
 		list_del_init(&tmph->lru);
 	}
 	num_hashed_sigs -= i;
+
+	DSM_PRINT(DEBUG_SIGN,	"del_hashes: deleted i=%d\n", i); 
 	return i;
 }
 
@@ -273,12 +286,20 @@ alloc_digsig_hash(struct inode *inode, struct digsig_hash_struct *next)
 	new->i_ino = inode->i_ino;
 	new->i_sb = inode->i_sb;
 	new->initialized = 1;
+	
+	/* debug makan: I know there is a memset two lines above! but
+	   when you debug ! */ 
+	new->next = NULL; 
+
 	if (next) {
 		new->next = next;
 		next->prev = new;
 	}
-	list_add_tail(&new->lru, &digsig_hash_lru);
-
+	
+	/* makan debug: it is going to be added to the list in add_signature  
+	   list_add_tail(&new->lru, &digsig_hash_lru);
+	*/ 
+	DSM_PRINT(DEBUG_SIGN,	"alloc_digsig_hash: alloc digsig hash for inode %d\n", (int) inode); 
 	return new;
 }
 
@@ -295,6 +316,8 @@ add_signature_hash(struct inode *inode)
 {
 	int h;
 	struct digsig_hash_struct *new;
+	
+	DSM_PRINT(DEBUG_SIGN,	"add_signature_hash: inode %d hash %d\n", (int) inode, (int) hash(inode) ); 
 
 	if (!inode)
 		return;
@@ -318,6 +341,7 @@ add_signature_hash(struct inode *inode)
 		digsig_hashes[h].next = NULL;
 		num_hashed_sigs++;
 		list_add_tail(&digsig_hashes[h].lru, &digsig_hash_lru);
+		DSM_PRINT(DEBUG_SIGN,	"add_signature_hash: in !digsig_hashes[h].initialized num hashed sigs %d\n", num_hashed_sigs); 
 		goto out_unlock;
 	}
 
@@ -329,6 +353,7 @@ add_signature_hash(struct inode *inode)
 	new->prev = &digsig_hashes[h];
 	list_add_tail(&new->lru, &digsig_hash_lru);
 	num_hashed_sigs++;
+	DSM_PRINT(DEBUG_SIGN,	"add_signature_hash: num hashed sigs %d new %d \n", num_hashed_sigs, (int) new); 
 
 out_unlock:
 	spin_unlock(&digsig_hash_lock);
@@ -382,9 +407,6 @@ Return value:
 static int
 dsi_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
 {
-/* 	if (mask & MAY_WRITE) */
-/* 		if (is_hashed_signature(inode)) */
-/* 			return -EPERM; */
 
 
   if (mask & MAY_WRITE)
