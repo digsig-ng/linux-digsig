@@ -145,7 +145,7 @@ Parameters  :
 Return value: 
 ******************************************************************************/
 int
-digsig_sign_verify_final(SIGCTX * ctx, char *sig, int siglen /* PublicKey */ ,
+digsig_sign_verify_final(SIGCTX * ctx, int siglen /* PublicKey */ ,
 		      unsigned char *signed_hash)
 {
 	char *digest;
@@ -167,7 +167,6 @@ digsig_sign_verify_final(SIGCTX * ctx, char *sig, int siglen /* PublicKey */ ,
 	rc = -EINVAL;
 	if (siglen < gDigestLength[ctx->digestAlgo])
 		goto err;
-	memcpy(sig, digest, gDigestLength[ctx->digestAlgo]);
 
 	switch (ctx->digestAlgo) {
 	case SIGN_RSA:

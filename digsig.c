@@ -241,7 +241,7 @@ static int
 digsig_verify_signature(char *sig_orig, struct file *file,
 		 unsigned long sh_offset)
 {
-	char *sig_result = NULL, *read_blocks = NULL;
+	char *read_blocks = NULL;
 	int retval = -EPERM;
 	unsigned int lower, upper, offset;
 	loff_t i_size;
@@ -262,18 +262,11 @@ digsig_verify_signature(char *sig_orig, struct file *file,
 		goto out;
 	}
 
-	sig_result = kmalloc(DIGSIG_ELF_SIG_SIZE, DIGSIG_SAFE_ALLOC);
-	if (!sig_result) {
-		DSM_ERROR ("kmalloc failed in %s for sig_result.\n", __FUNCTION__);
-		goto out;
-	}
 	read_blocks = kmalloc(DIGSIG_ELF_READ_BLOCK_SIZE, DIGSIG_SAFE_ALLOC);
 	if (!read_blocks) {
 		DSM_ERROR ("kmalloc failed in %s for read_block.\n", __FUNCTION__);
 		goto out;
 	}
-
-	memset(sig_result, 0, DIGSIG_ELF_SIG_SIZE);
 
 	i_size = i_size_read(file->f_dentry->d_inode);
 	for (offset = 0; offset < i_size; offset += DIGSIG_ELF_READ_BLOCK_SIZE){
@@ -315,7 +308,7 @@ digsig_verify_signature(char *sig_orig, struct file *file,
 	}
 
 	/* A bit of bsign formatting else hashes won't match, works with bsign v0.4.4 */
-	retval = digsig_sign_verify_final(ctx, sig_result, DIGSIG_ELF_SIG_SIZE,
+	retval = digsig_sign_verify_final(ctx, DIGSIG_ELF_SIG_SIZE,
 					    sig_orig + DIGSIG_BSIGN_INFOS);
 	if (retval != 0) {
 		DSM_PRINT(DEBUG_SIGN,
@@ -327,7 +320,6 @@ digsig_verify_signature(char *sig_orig, struct file *file,
 	// retval = 0;
 
 out:
-	kfree(sig_result);
 	kfree(read_blocks);
 	if (ctx) {
 		kfree(ctx->tvmem);
