@@ -666,11 +666,18 @@ static int digsig_file_mmap(struct file * file, unsigned long prot, unsigned lon
 	return retval;
 }
 
+static void digsig_inode_free_security(struct inode *inode)
+{
+	if (is_cached_signature(inode))
+		remove_signature(inode);
+}
+
 static struct security_operations digsig_security_ops = {
 	.file_mmap		= digsig_file_mmap,
 	.file_free_security	= digsig_file_free_security,
 	.inode_permission	= digsig_inode_permission,
 	.inode_unlink		= digsig_inode_unlink,
+	.inode_free_security    = digsig_inode_free_security,
 };
 
 static int __init digsig_init_module(void)
