@@ -31,11 +31,12 @@
 #include <linux/personality.h>
 #include <linux/elf.h>
 #include <linux/fs.h>
-#include <asm/uaccess.h>
 #include <linux/security.h>
 #include <linux/dcache.h>
 #include <linux/kobject.h>
 #include <linux/mman.h>
+#include <linux/version.h>
+#include <asm/uaccess.h>
 
 #include "dsi_sig_verify.h"
 #include "dsi_debug.h"
@@ -530,8 +531,19 @@ static inline int is_unprotected_file(struct file *file)
 			__FUNCTION__, file->f_dentry->d_name.name, exec_time); \
 	}
 	
-static int digsig_file_mmap(struct file * file, unsigned long prot, unsigned long flags)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,12)
+static int digsig_file_mmap(struct file * file,
+			unsigned long reqprot,
+			unsigned long calcprot,
+			unsigned long flags)
 {
+	unsigned long prot = reqprot;
+#else
+static int digsig_file_mmap(struct file * file,
+			unsigned long prot,
+			unsigned long flags)
+{
+#endif
 	struct elf64_hdr *elf64_ex;
 	struct elf32_hdr *elf32_ex;
 	int retval, die_if_elf = 0;
@@ -620,7 +632,7 @@ static int digsig_file_mmap(struct file * file, unsigned long prot, unsigned lon
 	/* Find signature section */
 	if (arch32)
 		sig_orig = digsig_find_signature32(
-				elf32_ex, (struct Elf32_Shdr *) elf64_shdata,
+				elf32_ex, (Elf32_Shdr *) elf64_shdata,
 				file, &sh_offset);
 	else
 		sig_orig = digsig_find_signature64(
