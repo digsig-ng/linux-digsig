@@ -1,0 +1,63 @@
+DigSig FAQ
+===========
+
+Question summary
+----------------
+
+Q1- Wouldn't you need to sign, say, /lib/ld-linux.so? In that case, you  
+can simply get it to load an execute almost anything that's ELF, even  
+on filesystems marked noexec, if I'm not mistaken...
+
+Q2- "Is it possible to write one's own ELF loader to read & interpret ELF
+executables, mmap the code,  so as to bypass DigSig"
+
+Q3- "What interest in combining DigSig with SELinux ?"
+
+Questions & Answers
+-------------------
+
+Q1- "Wouldn't you need to sign, say, /lib/ld-linux.so? In that case, you  
+can simply get it to load an execute almost anything that's ELF, even  
+on filesystems marked noexec, if I'm not mistaken..."
+
+It uses dlopen, which does mmap(PROT_EXEC), at which point digsig will
+check for a signature. 
+If you rewrite it to not use mmap(PROT_EXEC), then the signature will
+not match.  If you resign it, then you presumably know what you're
+doing. (Serge Hallyn)
+
+2.6.0 included a fix to stop that from working from noexec filesystems (Chris Boot)
+
+--------------------------------------------
+
+Q2- "Is it possible to write one's own ELF loader to read & interpret ELF
+executables, mmap the code,  so as to bypass DigSig"
+
+DigSig prevents this because when you mmap the code, this calls (at kernel
+level) do_mmap which triggers an LSM hook called file_mmap. DigSig implements
+this hook and performs signature verification at that point. (Axelle Apvrille)
+
+If you just mmap(file) and move regs.eip into that memory, it works. We
+can't do anything about that (Serge Hallyn).
+
+
+--------------------------------------------
+
+Q3- "What interest in combining DigSig with SELinux ?"
+
+1. selinux integrity controls on crucial digsig files, which
+digsig does not (and should not) protect itself
+
+2. digsig controls over selinux entry types.  So now you can
+protect domain transitions with small, verifiable entry points
+which are then signed to boot. 
+
+(Serge Hallyn)
+
+Combine it with SELinux, exec-shield, FORTIFY_SOURCE, -fstack-protector
+and, say, a COWed filesystem read off a CD and reset with every boot,
+ and you start to get a bit less insecure than you would otherwise be.
+
+(Nix)
+
+--------------------------------------------
