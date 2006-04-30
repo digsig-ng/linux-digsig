@@ -33,13 +33,31 @@ doing. (Serge Hallyn)
 Q2- "Is it possible to write one's own ELF loader to read & interpret ELF
 executables, mmap the code,  so as to bypass DigSig"
 
-DigSig prevents this because when you mmap the code, this calls (at kernel
-level) do_mmap which triggers an LSM hook called file_mmap. DigSig implements
-this hook and performs signature verification at that point. (Axelle Apvrille)
+If you use mmap, DigSig prevents this because when you mmap the code, 
+this calls (at kernel level) do_mmap which triggers an LSM hook 
+called file_mmap. DigSig implements this hook and performs 
+signature verification at that point. (Axelle Apvrille)
 
 If you just mmap(file) and move regs.eip into that memory, it works. We
 can't do anything about that (Serge Hallyn).
 
+However, the kernel can't rule out everything: all you need is to create
+anonymous mappings.  Via mmap, maybe on the stack, some heaps are
+still executable.  Then you load the code, fix it up for the address,
+and be done.  The kernel cannot and will not prevent a read(2) call on
+the binary.  That's all that's needed.  And without the SELinux
+support in place you cannot prevent non-exec memory creation and even
+then, some people need it (jvms, OpenGL libs, etc) to generate code on
+the fly.  So it's never completely ruled out.  Again, look at the code
+in http://people.redhat.com/drepper/selinux-mem.html. (Ulrich Drepper)
+
+ELF loaders do not need to be written in ELF. They can be written in
+Perl or bash scripts (Arjen van de Ven). 
+
+I had an extension to digsig earlier which enabled signing shellscripts
+using xattrs (just because it was a trivial task), but that's clearly
+insufficient as it would catch "./myscript.pl" but not "perl
+myscript.pl". (Serge Hallyn)
 
 --------------------------------------------
 
