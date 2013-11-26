@@ -1,0 +1,79 @@
+#!/bin/sh
+
+root_or_die()
+{
+    if [ "$(id -u)" != "0" ]
+	then
+	    echo "You must be root to load or unload kernel modules"
+	    exit 1
+    fi
+}
+sysfs_test()
+{
+    echo "Testing if sysfs is mounted in /sys."
+    sysfsmounted=`grep sysfs /proc/mounts`
+    if [ -n "$sysfsmounted" ]
+    then
+	echo "sysfs found"
+    else
+	echo "sysfs not mounted"
+	echo "please mount sysfs with a command like :"
+	echo "mount -t sysfs sysfs /sys"
+	exit 1
+    fi
+}
+public_key_test()
+{
+     echo "Testing if the public key exists."
+     if test -f "$1" 
+     then
+        echo "Pulic key found."
+    else
+        echo "Public key not found!"
+        echo "Usage digsig.init start public_key_file_name"
+        exit 1
+    fi
+
+
+}
+case "$1" in
+    start)
+	REVKEY_DIR=/etc/digsig_revoked_keys
+	root_or_die
+	sysfs_test
+	public_key_test $2
+	echo "Loading Digsig module."
+	/sbin/insmod -f ./digsig_verif.ko || exit 1
+	echo "Catting revoked sigs into revocation list"
+	if [ -d $REVKEY_DIR ]; then
+		for name in `/bin/ls $REVKEY_DIR`; do
+			/bin/cat $REVKEY_DIR/$name > /sys/digsig/revoke
+		done
+	fi
+	echo "Loading public key."	
+	./tools/extract_pkey $2
+	echo "Done."
+	;;
+    stop)
+	root_or_die
+	echo "Unloading Digsig."
+	/sbin/rmmod digsig_verif
+	echo "Done."
+	;;
+    compile)
+	make -C /lib/modules/`uname -r`/build SUBDIRS=$PWD modules
+	cd tools && make
+	;;
+    clean)
+	make clean
+	cd tools && make clean
+	;;
+    tags)
+	make tags
+	;;
+    *)
+	echo "Usage: $0 {start <pubkey>|stop|compile|clean}"
+	exit 1
+esac
+
+exit 0

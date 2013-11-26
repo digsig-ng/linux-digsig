@@ -1,0 +1,73 @@
+1.3.2
+====== 
+
+- white space and braces cleanups
+- fixup confusion on ERR_PTR vs. NULL (fixes Oopsen)
+- make anyting static that can be
+  - functions
+  - variables (and remove redundany 0 initialization for static vars)
+  - use static initializers for things like semaphores, lists, locks
+  - remove set_digsig_ops/security_set_operations in favor of
+    statically initiaized digsig_security_ops
+- name change digsig_attribute_st -> digsig_attribute
+- introduce DIGSIG_ATTR macro, and use for attribute initialization
+- change names of sysfs files (in module, and hopefully supporting scripts
+  and programs)
+  - digsig_interface -> key
+  - digsig_revoke -> revoke
+- move extern defs to header files
+- move towards single point of return (goto and error cleanup)
+- fixup memory leaks on error return paths
+- move towards use of error values rather than just -1
+- move ctx cleanup out of digsig_sign_verify_final so that caller is
+  responsible (less confusion and no chance of double free on error
+  cleanup)
+- use security_initcall()
+- remove unneeded digsig_init_revocation (list statically initialized now)
+- remove inline on external functions
+- use list_for_each_entry
+- collapse 'n' and 'e' cases in digsig_key_store for raw_public_key allocation
+- remove redundant file->f_security = NULL after digsig_allow_write_access()
+- move list_add_tail() in dsi_sysfs for revoked key into digsig_revocation.c
+  under helper digsig_add_revoked_sig()
+- add revoked_list_lock (used in above helper) for proper list manipulation
+- s/SHA1_TFM/sha1_tfm/ ala CodingStyle
+- fix bogus ctx==NULL check in digsig_sign_verify_update()
+
+1.3
+==== 
+        - Added documentation for digsig 
+        - added support for revoked signatures
+        - support to avoid vulnerability for rewrite of shared libraries
+        - removed some files not used 
+        - code clean up, naming standards using digsig every where, and some bug fixing
+
+1.1
+====
+	-added support for caching of signatures.
+1.0
+===
+
+	- the verification of signatures for the shared binaries has been
+	added. 
+	
+0.3
+===
+
+	- use sysfs to connect to the module instead of the char device 
+	
+0.2 
+=== 
+
+	- the main change is that we now use a script to launch the
+	module, the module doesn't read the public key file. We use a
+	small c program to read the public key and feed it into the module
+	using a char device.
+
+
+
+
+0.1
+=====
+	- Initial release. 
+	

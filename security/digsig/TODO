@@ -1,0 +1,113 @@
+TO DO LIST (just a memo)
+------------------------
+=============================================================
+- Use standard Makefiles instead of a digsig.init script
+=============================================================
+- Rename the dsi_ files to digsig_*
+=============================================================
+- Write man pages
+=============================================================
+- Enhance the crypto commands with ASM code to speed up.
+=============================================================
+- Being able to sign the revocation list file, to protect it from
+being tempered with. 
+
+4 possible solutions: 
+
+The three safest solutions I see are:
+
+   1. Use a .tar.gz.gpg of a directory on the root filesystem, which
+is extracted each time before digsig is started.  We may not guarantee
+secrecy (since the admin may forget to delete the untarred directory),
+but integrity violations will be detected.
+
+Minor Disadvantage: for Digsig to be able to take into account a newly
+added signature to the revocation list, we should unload and load the
+kernelm odule.
+
+   2. Use an encrypted loopback filesystem.  No better than (1), and
+requires more of the end-user in patching kernel etc.
+
+
+   3. Store on read-only or removable media.  More cumbersome than
+(1).  Seems best to use this in conjunction with (1), so that if
+digsig-dir.tar.gz.gpg has been messed with, we copy it back from cd.
+Of course, this is a no-brainer if we're paranoid enough to always run
+from a knoppix-like cd (as I may soon do .
+
+   4. Sign the revocation list by the same private key we use to sign
+binaries. Then, impleemnt a command "Reload Revocation List" c through
+sysfs, i.e. it is possible to send this command to Digsig through
+sysfs. Digsig then loads the revocation list, verifies the signature
+and updates its revocation list. 
+
+This revocation list can be a list of added revoked signatures, this
+can avoid Digsig reloading the whole revocation list, which can be too
+long. 
+
+Disadvantage: the security of the access to sysfs. But this is a
+problem we have anyway with loading the public key. 
+
+=============================================================
+
+- the authenticity of the public key: we need to be sure that the
+public key is really from the root's public key. 
+
+Possible solutions: 
+
+	use a certificate. Disadvantage of this solution is the need
+for a CA to sign the public key. 
+
+=============================================================
+
+THINGS THAT HAVE BEEN DONE RECENTLY: 
+
+- For time being, anybody with root privileges can use diginit to load
+a public key to the digisig. What happens if the attacker loads a
+false public key? Actually if this is really whatever, you could
+provoque a kernel panic ( I have already managed to do so !  ) At
+best, the execution for all binaries with valid signature would be
+denied. This can be an easy DoS attack.
+
+Possible solutions: 
+
+One possible solution could be that a pass phrase should be sent to
+Digsig with the public key through sysfs (for example, the first 16 or
+XX bytes sent to sysfs are the pass phrase). Digsig verifies this pass
+phrase before accepting the public key (to be used further for any
+command sent to Digsig). This pass phrase can be hard coded in the
+digsig itself, set as -D<passphrase> at compile time and allows Digsig
+to validate the input. This can also solve the problem of the
+authenticity of the public key (i.e. to be sure that the public key is
+really root's public key).
+
+Actually, as usual we should have -DUsePassPhrase -D<passphrase> in
+order to be able to validate or unvalidate the use of passphrase.
+
+Advantage: easy to implement, it is user friendly, people (at least
+security professionals) are used to enter pass phrases.
+
+Disadvantage: Not elegant and not very flexible: it's hard coded into
+Digsig code, to change the passphrase you need to recompile the whole
+module. The pass phrase is in clear text in the source code.
+
+take compiled_passphrase = sha1(pass).  Then when digsig is started,
+insist that sha1(user_pass) = compiled_passphrase.
+
+==> This has been done (patch)
+
+=============================================================
+
+
+
+
+Bugs -- High Priority
+---------------------
+
+
+
+Bugs -- Low Priority
+--------------------
+- Fix support of LibTom's library.
+- Workaround OpenPGP signature packet v3 bug
+- Workaround BSign zeroized area bug
