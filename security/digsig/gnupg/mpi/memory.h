@@ -22,7 +22,7 @@
 #define G10_MEMORY_H
 
 #include <linux/mm.h>
-
+#include <linux/slab.h>
 
 #define m_alloc(n)		kmalloc(n, GFP_KERNEL)
 #define m_alloc_clear(n)	kmalloc(n, GFP_KERNEL) /* can't memset, no size or don't know how to get it */
@@ -35,18 +35,6 @@
 
 /* &&&& realloc kernel hack, should check this */
 #define m_realloc(n,m,o)	krealloc((n),(m),(o))
-
-static inline void *
-krealloc(void *ptr, size_t size, int to_copy)
-{
-  void *tmp = NULL;
-  if (size) {
-    tmp = kmalloc(size,GFP_KERNEL);
-    if (ptr) memcpy(tmp,ptr,to_copy);
-  }
-  kfree(ptr);
-  return tmp;
-}
 
 #define DBG_MEMORY    memory_debug_mode
 #define DBG_MEMSTAT   memory_stat_debug_mode
