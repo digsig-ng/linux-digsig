@@ -35,6 +35,7 @@
 #include <linux/kobject.h>
 #include <linux/mman.h>
 #include <linux/version.h>
+#include <linux/semaphore.h>
 #include <asm/uaccess.h>
 
 #include "dsi_sig_verify.h"
@@ -64,7 +65,7 @@
 unsigned long int total_jiffies = 0;
 
 /* Allocate and free functions for each kind of security blob. */
-static DECLARE_MUTEX(digsig_sem);
+static DEFINE_SEMAPHORE(digsig_sem);
 
 /* Indicate if module as key or not */
 int g_init = 0;
