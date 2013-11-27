@@ -685,7 +685,7 @@ static void digsig_inode_free_security(struct inode *inode)
 }
 
 static struct security_operations digsig_security_ops = {
-	.file_mmap		= digsig_file_mmap,
+	.mmap_file		= digsig_file_mmap,
 	.file_free_security	= digsig_file_free_security,
 	.inode_permission	= digsig_inode_permission,
 	.inode_unlink		= digsig_inode_unlink,
