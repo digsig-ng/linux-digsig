@@ -260,7 +260,7 @@ digsig_revoked_store (struct kobject *obj, struct attribute *attr, const char *b
                 return -EPERM;
 
         if (count != DIGSIG_ELF_SIG_SIZE) {
-                DSM_ERROR("digsig_revoked_list_store: Oops - count=%d, "
+                DSM_ERROR("digsig_revoked_list_store: Oops - count=%zd, "
                           "sig size is %d\n", count, DIGSIG_ELF_SIG_SIZE);
                 return -EINVAL;
         }
