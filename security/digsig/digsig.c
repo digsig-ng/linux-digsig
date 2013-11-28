@@ -721,31 +721,7 @@ out:
 	return ret;
 }
 
-static void __exit digsig_exit_module(void)
-{
-	DSM_PRINT (DEBUG_INIT, "Deinitializing module\n");
-	g_init = 0;
-	if (secondary) {
-		DSM_PRINT (DEBUG_INIT, "Attempting to unregister from primary module\n");
-		if (mod_unreg_security ("digsig_verif", &digsig_security_ops)) {
-		DSM_ERROR (KERN_INFO "Failure unregistering DigSig with primary module\n");
-		}
-	} else {
-		if (unregister_security (&digsig_security_ops)) {
-		DSM_ERROR (KERN_INFO "Failure unregistering DigSig with the kernel\n");
-		}
-	}
-
-	digsig_sign_verify_free();
-	digsig_cleanup_sysfs();
-	digsig_cleanup_revocation();
-	digsig_cache_cleanup();
-	mpi_free(digsig_public_key[0]);
-	mpi_free(digsig_public_key[1]);
-}
-
 security_initcall(digsig_init_module);
-module_exit(digsig_exit_module);
 
 /* see linux/module.h */
 MODULE_LICENSE("GPL");
