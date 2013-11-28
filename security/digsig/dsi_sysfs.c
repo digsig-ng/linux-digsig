@@ -154,7 +154,7 @@ static struct kobject digsig_kobject = {
  */
 int __init digsig_init_sysfs(void)
 {
-	if (kobject_register (&digsig_kobject) != 0) {
+	if (kobject_init_and_add(&digsig_kobject, &digsig_kobj_type, NULL, "digsig") != 0) {
 		DSM_ERROR ("Digsig key failed to register properly\n");
 		goto err;
 	}
