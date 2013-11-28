@@ -171,7 +171,7 @@ int __init digsig_init_sysfs(void)
 create_revoke:
 	sysfs_remove_file (&digsig_kobject, &digsig_attr_key.attr);
 create_key:
-	kobject_unregister (&digsig_kobject);
+	kobject_del(&digsig_kobject);
 err:
 	return -1;
 }
@@ -180,7 +180,7 @@ void digsig_cleanup_sysfs(void)
 {
 	sysfs_remove_file (&digsig_kobject, &digsig_attr_key.attr);
 	sysfs_remove_file (&digsig_kobject, &digsig_attr_revoke.attr);
-	kobject_unregister (&digsig_kobject);
+	kobject_del(&digsig_kobject);
 }
 
 /********************************************************************************
