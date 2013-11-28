@@ -102,7 +102,7 @@ Parameters  :
 Return value: 
 ******************************************************************************/
 static int
-digsig_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
+digsig_inode_permission(struct inode *inode, int mask)
 {
 	if (!g_init)
 		return 0;
