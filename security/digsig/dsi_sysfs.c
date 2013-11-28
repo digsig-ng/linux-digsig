@@ -20,7 +20,6 @@
  *         digsig_interface -> key,  digsig_revoke -> revoke
  */
 
-#include <linux/config.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/security.h>
