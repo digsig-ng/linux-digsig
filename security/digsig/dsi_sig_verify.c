@@ -376,9 +376,8 @@ static void digsig_sha1_update(SIGCTX * ctx, char *buf, int buflen)
 	memcpy(ctx->tvmem, buf, buflen);
 	plaintext = (void *) ctx->tvmem;
 
-	ctx->sg[0].page = virt_to_page(plaintext);
-	ctx->sg[0].offset = ((long) plaintext & ~PAGE_MASK);
-	ctx->sg[0].length = buflen;
+	sg_set_page(&ctx->sg[0], virt_to_page(plaintext), buflen,
+		((long) plaintext & ~PAGE_MASK));
 
 	crypto_digest_update(ctx->tfm, ctx->sg, 1);
 }
