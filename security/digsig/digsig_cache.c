@@ -185,8 +185,10 @@ void digsig_cache_signature(struct inode *inode)
 	DSM_PRINT(DEBUG_SIGN,
 		"%s: adding cache entry at %d\n", __FUNCTION__, h);
 
-	if (!write_tryseqlock(&l->sequence))
+	if (!spin_trylock(&l->sequence.lock))
 		return;
+	else
+		write_seqcount_begin(&l->sequence.seqcount);
 
 	for (i=0; i<ENTRIES_PER_BUCKET && l->entry[i].inode; i++);
 
