@@ -18,7 +18,7 @@
 #define _DSI_SIG_VERIFY_H
 
 #include <linux/crypto.h>
-#include <asm/scatterlist.h>
+#include <linux/scatterlist.h>
 #include "gnupg/mpi/mpi.h"
 
 
