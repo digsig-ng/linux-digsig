@@ -16,10 +16,11 @@
  *          Chris Wright    Sep 2004
  */
 
+#include "digsig_crypto.h"
+
 #include <linux/string.h>
 #include <linux/mm.h>
 #include <linux/highmem.h>
-#include <linux/crypto.h>
 
 #include "dsi.h"
 #include "dsi_debug.h"
