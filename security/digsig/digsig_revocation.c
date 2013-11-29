@@ -38,7 +38,7 @@
 #define DIGSIG_BENCH 0
 #endif
 
-static spinlock_t revoked_list_wlock = SPIN_LOCK_UNLOCKED;
+DEFINE_SPINLOCK(revoked_list_wlock);
 
 #define REVOKE_BITS 6
 #define REVOKE_BUCKETS 64
