@@ -21,6 +21,7 @@
 #include <linux/moduleparam.h>
 #include <linux/kernel.h>
 #include <linux/fs.h>
+#include <linux/log2.h>
 #include <asm/uaccess.h>
 #include <linux/kobject.h>
 #include "dsi.h"
@@ -211,7 +212,7 @@ int __init digsig_init_caching(void)
 	int i, j;
 
 	/* dsi_cache_buckets must be a power of two */
-	digsig_hash_bits = long_log2(dsi_cache_buckets);
+	digsig_hash_bits = ilog2(dsi_cache_buckets);
 	if (dsi_cache_buckets != (1 << digsig_hash_bits)) {
 		digsig_hash_bits++;
 		dsi_cache_buckets = 1 << digsig_hash_bits;
