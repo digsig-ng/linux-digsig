@@ -35,7 +35,7 @@
 #include <linux/mman.h>
 #include <linux/version.h>
 #include <linux/semaphore.h>
-#include <asm/uaccess.h>
+#include <linux/uaccess.h>
 
 #include "dsi_sig_verify.h"
 #include "dsi_debug.h"
