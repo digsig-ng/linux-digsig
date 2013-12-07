@@ -133,7 +133,7 @@ int digsig_sign_verify_update(SIGCTX * ctx, char *buf, int buflen)
 		digsig_sha1_update(ctx, buf, buflen);
 		break;
 	default:
-		DSM_ERROR("%s: Unknown hash algo\n", __FUNCTION__);
+		DSM_ERROR("%s: Unknown hash algo\n", __func__);
 		return -EINVAL;
 	}
 
@@ -154,14 +154,14 @@ digsig_sign_verify_final(SIGCTX * ctx, int siglen /* PublicKey */ ,
 
 	digest = kmalloc (gDigestLength[ctx->digestAlgo], DIGSIG_SAFE_ALLOC);
 	if (!digest) {
-		DSM_ERROR ("kmalloc failed in %s for digest\n", __FUNCTION__);
+		DSM_ERROR ("kmalloc failed in %s for digest\n", __func__);
 		goto err;
 	}
 	/* TO DO: check the length of the signature: it should be equal to the length
 	   of the modulus */
 	if ((rc = digsig_sha1_final(ctx, digest)) < 0) {
 		DSM_ERROR
-		    ("%s: Cannot finalize hash algorithm\n", __FUNCTION__);
+		    ("%s: Cannot finalize hash algorithm\n", __func__);
 		goto err;
 	}
 
@@ -258,7 +258,7 @@ static int digsig_rsa_bsign_verify(unsigned char *hash_format, int length,
 
 	new_sig = kmalloc(gDigestLength[HASH_SHA1], DIGSIG_SAFE_ALLOC);
 	if (!new_sig) {
-		DSM_ERROR ("kmalloc failed in %s for new_sig\n", __FUNCTION__);
+		DSM_ERROR ("kmalloc failed in %s for new_sig\n", __func__);
 		return -ENOMEM;
 	}
 
