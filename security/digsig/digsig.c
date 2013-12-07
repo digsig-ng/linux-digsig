@@ -30,7 +30,6 @@
 #include <linux/personality.h>
 #include <linux/elf.h>
 #include <linux/fs.h>
-#include <linux/security.h>
 #include <linux/dcache.h>
 #include <linux/kobject.h>
 #include <linux/mman.h>
