@@ -143,14 +143,14 @@ static char *digsig_read_signature(struct file *file, unsigned long offset)
 	char *buffer = kmalloc(DIGSIG_ELF_SIG_SIZE, DIGSIG_SAFE_ALLOC);
 
 	if (!buffer) {
-		DSM_ERROR ("kmalloc failed in %s for buffer.\n", __FUNCTION__);
+		DSM_ERROR ("kmalloc failed in %s for buffer.\n", __func__);
 		return NULL;
 	}
 	retval = kernel_read(file, offset, (char *) buffer,
 					 DIGSIG_ELF_SIG_SIZE);
 	if (retval != DIGSIG_ELF_SIG_SIZE) {
 		DSM_PRINT(DEBUG_SIGN, "%s: Unable to read signature: %d\n",
-			  __FUNCTION__, retval);
+			  __func__, retval);
 		kfree(buffer);
 		buffer = NULL;
 	}
@@ -250,7 +250,7 @@ digsig_verify_signature(char *sig_orig, struct file *file,
 	down (&digsig_sem);
 	if (digsig_is_revoked_sig(sig_orig)) {
 		DSM_ERROR("%s: Refusing attempt to load an ELF file with"
-			  " a revoked signature.\n", __FUNCTION__);
+			  " a revoked signature.\n", __func__);
 		goto out;
 	}
 
@@ -258,13 +258,13 @@ digsig_verify_signature(char *sig_orig, struct file *file,
 	ctx = digsig_sign_verify_init(HASH_SHA1, SIGN_RSA);
 	if (!ctx ) {
 		DSM_PRINT(DEBUG_SIGN,
-			  "%s: Cannot allocate crypto context.\n", __FUNCTION__);
+			  "%s: Cannot allocate crypto context.\n", __func__);
 		goto out;
 	}
 
 	read_blocks = kmalloc(DIGSIG_ELF_READ_BLOCK_SIZE, DIGSIG_SAFE_ALLOC);
 	if (!read_blocks) {
-		DSM_ERROR ("kmalloc failed in %s for read_block.\n", __FUNCTION__);
+		DSM_ERROR ("kmalloc failed in %s for read_block.\n", __func__);
 		goto out;
 	}
 
@@ -276,7 +276,7 @@ digsig_verify_signature(char *sig_orig, struct file *file,
 		if (retval <= 0) {
 			DSM_PRINT(DEBUG_SIGN,
 				  "%s: Unable to read signature in blocks: %d\n",
-				  __FUNCTION__, retval);
+				  __func__, retval);
 			goto out;
 		}
 
@@ -302,7 +302,7 @@ digsig_verify_signature(char *sig_orig, struct file *file,
 		retval = digsig_sign_verify_update(ctx, read_blocks, retval);
 		if (retval < 0) {
 			DSM_PRINT(DEBUG_SIGN,
-				  "%s: Error updating crypto verification\n", __FUNCTION__);
+				  "%s: Error updating crypto verification\n", __func__);
 			goto out;
 		}
 	}
@@ -312,7 +312,7 @@ digsig_verify_signature(char *sig_orig, struct file *file,
 					    sig_orig + DIGSIG_BSIGN_INFOS);
 	if (retval != 0) {
 		DSM_PRINT(DEBUG_SIGN,
-			  "%s: Error calculating final crypto verification\n", __FUNCTION__);
+			  "%s: Error calculating final crypto verification\n", __func__);
 	        retval = -EPERM;
 		goto out;
 	}
@@ -394,23 +394,23 @@ static inline int elf_sanity_check32(struct elf32_hdr *elf_hdr)
 {
 	if (memcmp(elf_hdr->e_ident, ELFMAG, SELFMAG) != 0) {
 		DSM_PRINT(DEBUG_SIGN, "%s: Binary is not elf format\n",
-			  __FUNCTION__);
+			  __func__);
 		return -2;
 	}
 
 	if (!elf_hdr->e_shoff) {
-		DSM_ERROR("%s: No section header!\n", __FUNCTION__);
+		DSM_ERROR("%s: No section header!\n", __func__);
 		return -1;
 	}
 
 	if (elf_hdr->e_shentsize != sizeof(Elf32_Shdr)) {
-		DSM_ERROR("%s: Section header is wrong size!\n", __FUNCTION__);
+		DSM_ERROR("%s: Section header is wrong size!\n", __func__);
 		return -1;
 	}
 
 	if (elf_hdr->e_shnum > 65536U / sizeof(Elf32_Shdr)) {
 		DSM_ERROR("%s: Too many entries in Section Header!\n",
-			  __FUNCTION__);
+			  __func__);
 		return -1;
 	}
 
@@ -421,23 +421,23 @@ static inline int elf_sanity_check64(struct elf64_hdr *elf_hdr)
 {
 	if (memcmp(elf_hdr->e_ident, ELFMAG, SELFMAG) != 0) {
 		DSM_PRINT(DEBUG_SIGN, "%s: Binary is not elf format\n",
-			  __FUNCTION__);
+			  __func__);
 		return -2;
 	}
 
 	if (!elf_hdr->e_shoff) {
-		DSM_ERROR("%s: No section header!\n", __FUNCTION__);
+		DSM_ERROR("%s: No section header!\n", __func__);
 		return -1;
 	}
 
 	if (elf_hdr->e_shentsize != sizeof(Elf64_Shdr)) {
-		DSM_ERROR("%s: Section header is wrong size!\n", __FUNCTION__);
+		DSM_ERROR("%s: Section header is wrong size!\n", __func__);
 		return -1;
 	}
 
 	if (elf_hdr->e_shnum > 65536U / sizeof(Elf64_Shdr)) {
 		DSM_ERROR("%s: Too many entries in Section Header!\n",
-			  __FUNCTION__);
+			  __func__);
 		return -1;
 	}
 
@@ -458,7 +458,7 @@ static inline struct elf64_hdr *read_elf_header(struct file *file)
 
 	elf_ex = kmalloc(sizeof(struct elf64_hdr), DIGSIG_SAFE_ALLOC);
 	if (!elf_ex) {
-		DSM_ERROR ("%s: kmalloc failed for elf_ex\n", __FUNCTION__);
+		DSM_ERROR ("%s: kmalloc failed for elf_ex\n", __func__);
 		return ERR_PTR(-ENOMEM);
 	}
 
@@ -489,14 +489,14 @@ read_section_header(struct file *file, unsigned long sh_size,
 	elf_shdata = kmalloc(sh_size, DIGSIG_SAFE_ALLOC);
 	if (!elf_shdata) {
 		DSM_ERROR("%s: Cannot allocate memory to read Section Header\n",
-			  __FUNCTION__);
+			  __func__);
 		return ERR_PTR(-ENOMEM);
 	}
 
 	retval = kernel_read(file, sh_off, (char *)elf_shdata, sh_size);
 
 	if (retval < 0 || (unsigned long)retval != sh_size) {
-		DSM_ERROR("%s: Unable to read binary %s (offset %lu size %lu): %d\n", __FUNCTION__,
+		DSM_ERROR("%s: Unable to read binary %s (offset %lu size %lu): %d\n", __func__,
 			  file->f_dentry->d_name.name, sh_off, sh_size, retval);
 		kfree(elf_shdata);
 		return ERR_PTR(-EINVAL);
@@ -527,7 +527,7 @@ static inline int is_unprotected_file(struct file *file)
 		total_jiffies += exec_time; \
 		DSM_PRINT(DEBUG_TIME, \
 			"Time to execute %s on %s is %li\n", \
-			__FUNCTION__, file->f_dentry->d_name.name, exec_time); \
+			__func__, file->f_dentry->d_name.name, exec_time); \
 	}
 	
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,12)
@@ -640,7 +640,7 @@ static int digsig_file_mmap(struct file * file,
 	if (sig_orig == NULL) {
 		DSM_PRINT(DEBUG_SIGN,
 		"%s: Signature not found for the binary: %s !\n", 
-			  __FUNCTION__, file->f_dentry->d_name.name);
+			  __func__, file->f_dentry->d_name.name);
 		goto out_free_shdata;
 	}
 
@@ -649,17 +649,17 @@ static int digsig_file_mmap(struct file * file,
 
 	if (!retval) {
 		DSM_PRINT(DEBUG_SIGN,
-			  "%s: Signature verification successful\n", __FUNCTION__);
+			  "%s: Signature verification successful\n", __func__);
 		digsig_cache_signature(file->f_dentry->d_inode);
 		allow_write_on_exit = 0;
 	} else if (retval > 0) {
 		DSM_ERROR("%s: Signature do not match for %s\n",
-			  __FUNCTION__, file->f_dentry->d_name.name);
+			  __func__, file->f_dentry->d_name.name);
 		retval = -EPERM;
 	} else {
 		DSM_PRINT(DEBUG_SIGN,
 			  "%s: Signature verification failed because of errors: %d for %s\n",
-			  __FUNCTION__, retval, file->f_dentry->d_name.name);
+			  __func__, retval, file->f_dentry->d_name.name);
 		retval = -EPERM;
 	}
 
@@ -709,7 +709,7 @@ static int __init digsig_init_module(void)
 
 	/* register */
 	if (register_security(&digsig_security_ops)) {
-		DSM_ERROR("%s: Failure registering DigSig as primairy security module\n", __FUNCTION__);
+		DSM_ERROR("%s: Failure registering DigSig as primairy security module\n", __func__);
 	}
 	return 0;
 out_sysfs:
