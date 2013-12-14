@@ -1,0 +1,6 @@
+config SECURITY_DIGSIG
+        bool "DigSig Support"
+        depends on SECURITY && CRYPTO
+        default n
+        help
+          This enables the DigSig security module.
