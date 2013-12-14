@@ -6,7 +6,7 @@
  * This file contains the sysfs interface to userspace.
  *
  * Copyright (C) 2002-2003 Ericsson, Inc
- * Copyright (c) 2003-2004 International Business Machines <serue@us.ibm.com> 
+ * Copyright (c) 2003-2004 International Business Machines <serue@us.ibm.com>
  *
  *      This program is free software; you can redistribute it and/or modify
  *      it under the terms of the GNU General Public License as published by
@@ -16,7 +16,7 @@
  * Author: Vincent Roy
  * modifs: Serge Hallyn Mar 2003: separate into own file, add revocation
  *	interface.
- *         Chris Wright Sept 2004: change names of sysfs files 
+ *         Chris Wright Sept 2004: change names of sysfs files
  *         digsig_interface -> key,  digsig_revoke -> revoke
  */
 
@@ -57,24 +57,24 @@ struct digsig_attribute  {
 };
 
 #ifndef __ATTR
-#define __ATTR(_name,_mode,_show,_store) { \
-        .attr = {.name = __stringify(_name), .mode = _mode, .owner = THIS_MODULE },     \
-        .show   = _show,                                        \
-        .store  = _store,                                       \
+#define __ATTR(_name, _mode, _show, _store) { \
+	.attr = {.name = __stringify(_name), .mode = _mode, .owner = THIS_MODULE }, \
+	.show   = _show, \
+	.store  = _store, \
 }
-#endif 
+#endif
 
 #define DIGSIG_ATTR(_name, _mode, _show, _store)	\
-struct digsig_attribute digsig_attr_##_name = __ATTR(_name,_mode,_show,_store)
+struct digsig_attribute digsig_attr_##_name = __ATTR(_name, _mode, _show, _store)
 
 /*
  * These are the show/hide prototypes and attribute for the
  * /sys/digsig/key file, which is used to tell digsig the
  * public key to use to verify ELF file signatures.
  */
-static ssize_t digsig_key_show (struct kobject *obj, struct attribute *attr,
+static ssize_t digsig_key_show(struct kobject *obj, struct attribute *attr,
 	char *buff);
-static ssize_t digsig_key_store (struct kobject *obj, struct attribute *attr,
+static ssize_t digsig_key_store(struct kobject *obj, struct attribute *attr,
 	const char *buff, size_t count);
 /*
  * For the curious, notice what's going on:  We create a structure which
@@ -94,9 +94,9 @@ static DIGSIG_ATTR(key, 0600, digsig_key_show, digsig_key_store);
  * ELF file signatures which are revoked.  Digsig will not allow
  * loading any files which carry one of these signatures.
  */
-static ssize_t digsig_revoked_show (struct kobject *obj,
+static ssize_t digsig_revoked_show(struct kobject *obj,
 	struct attribute *attr, char *buff);
-static ssize_t digsig_revoked_store (struct kobject *obj,
+static ssize_t digsig_revoked_store(struct kobject *obj,
 	struct attribute *attr, const char *buff, size_t count);
 static DIGSIG_ATTR(revoke, 0600, digsig_revoked_show, digsig_revoked_store);
 
@@ -155,21 +155,21 @@ static struct kobject digsig_kobject = {
 int __init digsig_init_sysfs(void)
 {
 	if (kobject_init_and_add(&digsig_kobject, &digsig_kobj_type, NULL, "digsig") != 0) {
-		DSM_ERROR ("Digsig key failed to register properly\n");
+		DSM_ERROR("Digsig key failed to register properly\n");
 		goto err;
 	}
 	if (sysfs_create_file(&digsig_kobject, &digsig_attr_key.attr) != 0) {
-		DSM_ERROR ("Create file failed\n");
+		DSM_ERROR("Create file failed\n");
 		goto create_key;
 	}
 	if (sysfs_create_file(&digsig_kobject, &digsig_attr_revoke.attr) != 0) {
-		DSM_ERROR ("Create revocation file failed\n");
+		DSM_ERROR("Create revocation file failed\n");
 		goto create_revoke;
 	}
 	return 0;
 
 create_revoke:
-	sysfs_remove_file (&digsig_kobject, &digsig_attr_key.attr);
+	sysfs_remove_file(&digsig_kobject, &digsig_attr_key.attr);
 create_key:
 	kobject_del(&digsig_kobject);
 err:
@@ -178,8 +178,8 @@ err:
 
 void digsig_cleanup_sysfs(void)
 {
-	sysfs_remove_file (&digsig_kobject, &digsig_attr_key.attr);
-	sysfs_remove_file (&digsig_kobject, &digsig_attr_revoke.attr);
+	sysfs_remove_file(&digsig_kobject, &digsig_attr_key.attr);
+	sysfs_remove_file(&digsig_kobject, &digsig_attr_revoke.attr);
 	kobject_del(&digsig_kobject);
 }
 
@@ -190,11 +190,11 @@ this format:
  - 1 byte : character 'n' or 'e'
  - 2 bytes: length of MPI in BITS
  - MPI
-Parameters  : 
-Return value: 
+Parameters  :
+Return value:
 *********************************************************************************/
 static ssize_t
-digsig_key_store (struct kobject *obj, struct attribute *attr, const char *buff, size_t count)
+digsig_key_store(struct kobject *obj, struct attribute *attr, const char *buff, size_t count)
 {
 	unsigned char *raw_public_key;
 	int mpi_size;
@@ -204,7 +204,7 @@ digsig_key_store (struct kobject *obj, struct attribute *attr, const char *buff,
 		total_jiffies = 0;
 		break;
 	case 'p':
-		printk ("total jiffies = %li\n", total_jiffies);
+		printk("total jiffies = %li\n", total_jiffies);
 		break;
 	}
 
@@ -244,9 +244,8 @@ digsig_key_store (struct kobject *obj, struct attribute *attr, const char *buff,
 
 
 static ssize_t
-digsig_key_show (struct kobject *obj, struct attribute *attr, char *buff)
+digsig_key_show(struct kobject *obj, struct attribute *attr, char *buff)
 {
-
 	return 0;
 }
 
@@ -254,26 +253,25 @@ digsig_key_show (struct kobject *obj, struct attribute *attr, char *buff)
  * callbacks for read/write to /sys/digsig/revoke file
  */
 static ssize_t
-digsig_revoked_store (struct kobject *obj, struct attribute *attr, const char *buff, size_t count)
+digsig_revoked_store(struct kobject *obj, struct attribute *attr, const char *buff, size_t count)
 {
-        if (g_init)
-                return -EPERM;
+	if (g_init)
+		return -EPERM;
 
-        if (count != DIGSIG_ELF_SIG_SIZE) {
-                DSM_ERROR("digsig_revoked_list_store: Oops - count=%zd, "
-                          "sig size is %d\n", count, DIGSIG_ELF_SIG_SIZE);
-                return -EINVAL;
-        }
+	if (count != DIGSIG_ELF_SIG_SIZE) {
+		DSM_ERROR("digsig_revoked_list_store: Oops - count=%zd, "
+			  "sig size is %d\n", count, DIGSIG_ELF_SIG_SIZE);
+		return -EINVAL;
+	}
 
 	digsig_add_revoked_sig(buff);
 
-        DSM_PRINT(DEBUG_SIGN, "Added a revoked sig.\n");
-        return count;
+	DSM_PRINT(DEBUG_SIGN, "Added a revoked sig.\n");
+	return count;
 }
 
 static ssize_t
-digsig_revoked_show (struct kobject *obj, struct attribute *attr, char *buff)
+digsig_revoked_show(struct kobject *obj, struct attribute *attr, char *buff)
 {
-
-        return 0;
+	return 0;
 }
