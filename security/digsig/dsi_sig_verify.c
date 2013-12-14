@@ -11,8 +11,8 @@
  *      (at your option) any later version.
  *
  * Authors: Axelle Apvrille
- *          David Gordon Aug 2003 
- * modifs:  Makan Pourzandi Sep 2003 
+ *          David Gordon Aug 2003
+ * modifs:  Makan Pourzandi Sep 2003
  *          Chris Wright    Sep 2004
  */
 
@@ -43,23 +43,23 @@ MPI digsig_public_key[] = {MPI_NULL, MPI_NULL};
 
 
 /******************************************************************************
-                             Internal functions 
+                             Internal functions
 ******************************************************************************/
 
 static int
 digsig_rsa_bsign_verify(unsigned char *sha_cat, int length,
 		     unsigned char *signed_hash);
 
-static int digsig_sha1_init(SIGCTX * ctx);
+static int digsig_sha1_init(SIGCTX *ctx);
 
-static void digsig_sha1_update(SIGCTX * ctx, char *buf, int buflen);
+static void digsig_sha1_update(SIGCTX *ctx, char *buf, int buflen);
 
-static int digsig_sha1_final(SIGCTX * ctx, char *digest);
+static int digsig_sha1_final(SIGCTX *ctx, char *digest);
 
 
 /******************************************************************************
-Description : 
-Parameters  : 
+Description :
+Parameters  :
   hashalgo the identifier of the hash algorithm to use (HASH_SHA1 for instance)
   signalgo sign algorithm identifier. Ex. SIGN_RSA
 Return value: a signature context valid for this signature only
@@ -116,14 +116,14 @@ err:
 }
 
 /******************************************************************************
-Description : 
-Parameters  : 
+Description :
+Parameters  :
   ctx
   buf data to sign (part of a bigger buffer)
   buflen length of buf
 Return value: 0 normally
 ******************************************************************************/
-int digsig_sign_verify_update(SIGCTX * ctx, char *buf, int buflen)
+int digsig_sign_verify_update(SIGCTX *ctx, char *buf, int buflen)
 {
 	if (ctx == NULL)
 		return -EINVAL;
@@ -142,19 +142,19 @@ int digsig_sign_verify_update(SIGCTX * ctx, char *buf, int buflen)
 
 /******************************************************************************
 Description : This is where the RSA signature verification actually takes place
-Parameters  : 
-Return value: 
+Parameters  :
+Return value:
 ******************************************************************************/
 int
-digsig_sign_verify_final(SIGCTX * ctx, int siglen /* PublicKey */ ,
+digsig_sign_verify_final(SIGCTX *ctx, int siglen /* PublicKey */ ,
 		      unsigned char *signed_hash)
 {
 	char *digest;
 	int rc = -ENOMEM;
 
-	digest = kmalloc (gDigestLength[ctx->digestAlgo], DIGSIG_SAFE_ALLOC);
+	digest = kmalloc(gDigestLength[ctx->digestAlgo], DIGSIG_SAFE_ALLOC);
 	if (!digest) {
-		DSM_ERROR ("kmalloc failed in %s for digest\n", __func__);
+		DSM_ERROR("kmalloc failed in %s for digest\n", __func__);
 		goto err;
 	}
 	/* TO DO: check the length of the signature: it should be equal to the length
@@ -183,16 +183,16 @@ digsig_sign_verify_final(SIGCTX * ctx, int siglen /* PublicKey */ ,
 	/* free everything */
 	/* do not free SHA1-TFM. For optimization, we choose always to use the same one */
 err:
-	kfree (digest);
+	kfree(digest);
 	return rc;
 }
 
 /******************************************************************************
-Description : 
-   Call this only at the end of the whole program when you do not want to use 
+Description :
+   Call this only at the end of the whole program when you do not want to use
    signature verification again.
-Parameters  : 
-Return value: 
+Parameters  :
+Return value:
 ******************************************************************************/
 void digsig_sign_verify_free(void)
 {
@@ -205,9 +205,9 @@ void digsig_sign_verify_free(void)
 }
 
 /******************************************************************************
-Description : 
+Description :
    Initialize public key
-Parameters  : 
+Parameters  :
 Return value:
 ******************************************************************************/
 
@@ -235,16 +235,16 @@ int digsig_init_pkey(const char read_par, unsigned char *raw_public_key, int mpi
 }
 
 /******************************************************************************
-Description : 
+Description :
    Performs RSA verification of signature contained in binary
-Parameters  : 
+Parameters  :
 Return value: 0 - RSA signature is valid
               1 - RSA signature is invalid
               -1 - an error occured
 ******************************************************************************/
 
 static int digsig_rsa_bsign_verify(unsigned char *hash_format, int length,
-			 unsigned char *signed_hash)
+				   unsigned char *signed_hash)
 {
 	int rc = 0, cmp;
 	MPI hash, data;
@@ -258,14 +258,14 @@ static int digsig_rsa_bsign_verify(unsigned char *hash_format, int length,
 
 	new_sig = kmalloc(gDigestLength[HASH_SHA1], DIGSIG_SAFE_ALLOC);
 	if (!new_sig) {
-		DSM_ERROR ("kmalloc failed in %s for new_sig\n", __func__);
+		DSM_ERROR("kmalloc failed in %s for new_sig\n", __func__);
 		return -ENOMEM;
 	}
 
 	/* Get MPI of signed data from .sig file/section */
 	nread = DIGSIG_ELF_SIG_SIZE;
 
-	data = mpi_read_from_buffer(signed_hash + DIGSIG_RSA_DATA_OFFSET, 
+	data = mpi_read_from_buffer(signed_hash + DIGSIG_RSA_DATA_OFFSET,
 				    &nread, 0);
 	if (!data) {
 		kfree(new_sig);
@@ -280,16 +280,16 @@ static int digsig_rsa_bsign_verify(unsigned char *hash_format, int length,
 	ctx = kmalloc(sizeof(SIGCTX), GFP_KERNEL);
 	if (!ctx) {
 		DSM_ERROR("Cannot allocate ctx\n");
-		mpi_free (data);
-		kfree (new_sig);
+		mpi_free(data);
+		kfree(new_sig);
 		return -ENOMEM;
 	}
 
 	ctx->tvmem = kmalloc(TVMEMSIZE, GFP_KERNEL);
 	if (!ctx->tvmem) {
-		kfree (ctx);
+		kfree(ctx);
 		mpi_free(data);
-		kfree (new_sig);
+		kfree(new_sig);
 		DSM_ERROR("Cannot allocate plaintext buffer\n");
 		return -ENOMEM;
 	}
@@ -301,7 +301,7 @@ static int digsig_rsa_bsign_verify(unsigned char *hash_format, int length,
 
 	for (i = 0; i < SIZEOF_UNSIGNED_INT; i++) {
 		sig_timestamp[i] =
-		    signed_hash[DIGSIG_RSA_TIMESTAMP_OFFSET + i] & 0xff;
+			signed_hash[DIGSIG_RSA_TIMESTAMP_OFFSET + i] & 0xff;
 	}
 
 	digsig_sha1_update(ctx, DIGSIG_BSIGN_STRING, DIGSIG_BSIGN_GREET_SIZE);
@@ -333,19 +333,19 @@ static int digsig_rsa_bsign_verify(unsigned char *hash_format, int length,
 	mpi_free(data);
 	kfree(ctx->tvmem);
 	kfree(ctx);
-	kfree (new_sig);
+	kfree(new_sig);
 	return rc;
 }
 
 
 /******************************************************************************
-Description : 
+Description :
    initialisation of hash with sha1
-Parameters  : 
+Parameters  :
 Return value: 0 for successful allocation, -1 for failed
 ******************************************************************************/
 
-static int digsig_sha1_init(SIGCTX * ctx)
+static int digsig_sha1_init(SIGCTX *ctx)
 {
 	if (ctx == NULL)
 		return -1;
@@ -364,12 +364,12 @@ static int digsig_sha1_init(SIGCTX * ctx)
 
 
 /******************************************************************************
-Description : Portability layer function. 
-Parameters  : 
-Return value: void. 
+Description : Portability layer function.
+Parameters  :
+Return value: void.
 ******************************************************************************/
 
-static void digsig_sha1_update(SIGCTX * ctx, char *buf, int buflen)
+static void digsig_sha1_update(SIGCTX *ctx, char *buf, int buflen)
 {
 	char *plaintext;
 
@@ -383,12 +383,12 @@ static void digsig_sha1_update(SIGCTX * ctx, char *buf, int buflen)
 }
 
 /******************************************************************************
-Description : Portability layer function. 
-Parameters  : 
+Description : Portability layer function.
+Parameters  :
 Return value: 0 for successful allocation, -EINVAL for failed
 ******************************************************************************/
 
-static int digsig_sha1_final(SIGCTX * ctx, char *digest)
+static int digsig_sha1_final(SIGCTX *ctx, char *digest)
 {
 	/* TO DO: check the length of the signature: it should be equal to the length
 	   of the modulus */
