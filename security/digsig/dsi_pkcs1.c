@@ -4,7 +4,7 @@
  * pkcs1.c
  *
  * This file contains the PKCS#1 encoding for RSA signature verification
- * 
+ *
  * Copyright (C) 2003 Ericsson, Inc
  *
  *      This program is free software; you can redistribute it and/or modify
@@ -13,7 +13,7 @@
  *      (at your option) any later version.
  *
  * Author: Axelle Apvrille <axelle.apvrille@ericsson.ca>
- *        
+ *
  */
 
 #include "dsi_pkcs1.h"
@@ -27,10 +27,9 @@ struct hashinfo_st {
 
 /* internal variable containing hardcoded parts for DigestInfo value of given algorithms */
 static struct hashinfo_st gDigestAlgInfo[] = {
-	{20, 15,
-	 {0x30, 0x21, 0x30, 0x09, 0x06, 0x05, 0x2b, 0x0e, 0x03, 0x02, 0x1a,
-	  0x05,
-	  0x00, 0x04, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00}}
+	{ 20, 15,
+	  { 0x30, 0x21, 0x30, 0x09, 0x06, 0x05, 0x2b, 0x0e, 0x03, 0x02,
+	    0x1a, 0x05, 0x00, 0x04, 0x14, 0x00, 0x00, 0x00, 0x00, 0x00 } }
 };
 
 /**
@@ -50,12 +49,10 @@ static struct hashinfo_st gDigestAlgInfo[] = {
 void
 EMSA_PKCS1_V1_5_encode(char *out, int outlen, char *hashed, int hashalgo)
 {
-	int tlen =
-		gDigestAlgInfo[hashalgo].digestinfo_len +
-		gDigestAlgInfo[hashalgo].hash_len;
-	if (outlen < tlen + 11) {
+	int tlen = gDigestAlgInfo[hashalgo].digestinfo_len +
+		   gDigestAlgInfo[hashalgo].hash_len;
+	if (outlen < tlen + 11)
 		return;
-	}
 
 	/* expected format is : 0x00 0x01 <--- 0xff ---> 0x00 DigestInfo in DER Hash */
 	out[0] = 0x00;
