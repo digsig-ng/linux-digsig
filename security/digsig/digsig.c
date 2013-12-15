@@ -11,11 +11,11 @@
  *      the Free Software Foundation; either version 2 of the License, or
  *      (at your option) any later version.
  *
- * Author: David Gordon Aug 2003 
- * modifs: Makan Pourzandi Nov 2003 - Sept 2004: fixes - Feb 2005: bug fix 
- *         Vincent Roy  Nov 2003: add functionality for mmap  
+ * Author: David Gordon Aug 2003
+ * modifs: Makan Pourzandi Nov 2003 - Sept 2004: fixes - Feb 2005: bug fix
+ *         Vincent Roy  Nov 2003: add functionality for mmap
  *         Serge Hallyn Jan 2004: add caching of signature validation
- *         Chris Wright Sept 2004: many fixes 
+ *         Chris Wright Sept 2004: many fixes
  */
 
 
@@ -84,7 +84,7 @@ MODULE_PARM_DESC(dsi_cache_buckets, "Number of cache buckets for signatures vali
 
 
 /******************************************************************************
-Description : 
+Description :
  * For a file being opened for write, check:
  * 1. whether it is a library currently being dlopen'ed.  If it is, then
  *    inode->i_security > 0.
@@ -97,8 +97,8 @@ Description :
  * can modify the file that he could compromise the system.  Because,
  * the new library needs to have a valid signature (i.e. the admin
  * must use the right private key to sign his library) to get loaded.
-Parameters  : 
-Return value: 
+Parameters  :
+Return value:
 ******************************************************************************/
 static int
 digsig_inode_permission(struct inode *inode, int mask)
@@ -118,11 +118,11 @@ digsig_inode_permission(struct inode *inode, int mask)
 }
 
 /******************************************************************************
-Description : 
+Description :
  * If an inode is unlinked, we don't want to hang onto it's
  * signature validation ticket
-Parameters  : 
-Return value: 
+Parameters  :
+Return value:
 ******************************************************************************/
 static int
 digsig_inode_unlink(struct inode *dir, struct dentry *dentry)
@@ -161,15 +161,15 @@ static char *digsig_read_signature(struct file *file, unsigned long offset)
 /******************************************************************************
 Description : find signature section in elf binary
               caller is responsible for deallocating memory of buffer returned
-Parameters  : 
+Parameters  :
    elf_ex  is elf header
    elf_shdata is all entries in section header table of elf
    file contains file handle of binary
-   sh_offset is offset of signature section in elf. sh_offset is set to offset 
+   sh_offset is offset of signature section in elf. sh_offset is set to offset
       of signature section in elf
-Return value: Upon suscess: buffer containing signature (size of signature is fixed 
+Return value: Upon suscess: buffer containing signature (size of signature is fixed
               depending on algorithm used)
-              Failure: null pointer 
+              Failure: null pointer
 ******************************************************************************/
 static char *digsig_find_signature32(struct elf32_hdr *elf_ex,
 				Elf32_Shdr * elf_shdata, struct file *file,
@@ -229,7 +229,7 @@ static char *digsig_find_signature64(struct elf64_hdr *elf_ex,
 
 /******************************************************************************
 Description : verify if signature matches binary's signature
-Parameters  : 
+Parameters  :
    filename of elf executable
    elf_shdata is the data of the signature section
    sig_orig is the original signature of the binary
@@ -282,7 +282,7 @@ digsig_verify_signature(char *sig_orig, struct file *file,
 
 		/* Makan: This is in order to avoid building a buffer
 		   inside the kernel. At each read we check to be sure
-		   that the parts of the signature read are set to 0 */ 
+		   that the parts of the signature read are set to 0 */
 		/* Must zero out signature section to match bsign mechanism */
 		lower = sh_offset;	/* lower bound of memset */
 		upper = sh_offset + DIGSIG_ELF_SIG_SIZE;	/* upper bound */
@@ -386,7 +386,7 @@ static void digsig_file_free_security(struct file *file)
 
 /**
  * Basic verification of an ELF header
- * 
+ *
  * @param elf_hdr pointer to an elfhdr
  * @return 0 if header ok, -2 if non-elf, -1 otherwise
  */
@@ -485,7 +485,7 @@ read_section_header(struct file *file, unsigned long sh_size,
 {
 	Elf64_Shdr *elf_shdata;
 	int retval;
-	
+
 	elf_shdata = kmalloc(sh_size, DIGSIG_SAFE_ALLOC);
 	if (!elf_shdata) {
 		DSM_ERROR("%s: Cannot allocate memory to read Section Header\n",
@@ -529,7 +529,7 @@ static inline int is_unprotected_file(struct file *file)
 			"Time to execute %s on %s is %li\n", \
 			__func__, file->f_dentry->d_name.name, exec_time); \
 	}
-	
+
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,12)
 static int digsig_file_mmap(struct file * file,
 			unsigned long reqprot,
@@ -573,7 +573,7 @@ static int digsig_file_mmap(struct file * file,
 	start_digsig_bench;
 
 	DSM_PRINT(DEBUG_SIGN, "binary is %s\n", file->f_dentry->d_name.name);
- 
+
 	/*
 	 * if file_security is set, then this process has already
 	 * incremented the writer count on this inode, don't do
@@ -581,7 +581,7 @@ static int digsig_file_mmap(struct file * file,
 	 */
 	if (get_file_security(file) == 0) {
 		allow_write_on_exit = 1;
-		retval = digsig_deny_write_access(file); 
+		retval = digsig_deny_write_access(file);
 		if (retval) {
 			die_if_elf = retval;
 			allow_write_on_exit = 0;
@@ -590,7 +590,7 @@ static int digsig_file_mmap(struct file * file,
 
 	retval = 0;
 	if (is_cached_signature(file->f_dentry->d_inode)) {
-		DSM_PRINT(DEBUG_SIGN, "Binary %s had a cached signature validation.\n", 
+		DSM_PRINT(DEBUG_SIGN, "Binary %s had a cached signature validation.\n",
 			  file->f_dentry->d_name.name);
 		allow_write_on_exit = 0;
 		goto out_file_no_buf;
@@ -616,7 +616,7 @@ static int digsig_file_mmap(struct file * file,
 	elf32_ex = (struct elf32_hdr *) elf64_ex;
 	if (arch32) {
 		size = elf32_ex->e_shnum * sizeof(Elf32_Shdr);
-		elf64_shdata = read_section_header(file, size, 
+		elf64_shdata = read_section_header(file, size,
 			elf32_ex->e_shoff);
 	} else {
 		size = elf64_ex->e_shnum * sizeof(Elf64_Shdr);
@@ -639,7 +639,7 @@ static int digsig_file_mmap(struct file * file,
 
 	if (sig_orig == NULL) {
 		DSM_PRINT(DEBUG_SIGN,
-		"%s: Signature not found for the binary: %s !\n", 
+		"%s: Signature not found for the binary: %s !\n",
 			  __func__, file->f_dentry->d_name.name);
 		goto out_free_shdata;
 	}
@@ -669,7 +669,7 @@ static int digsig_file_mmap(struct file * file,
  out_with_file:
 	kfree (elf64_ex);
  out_file_no_buf:
- 	if (allow_write_on_exit)
+	if (allow_write_on_exit)
 		digsig_allow_write_access(file);
 
 	end_digsig_bench;
@@ -696,7 +696,7 @@ static int __init digsig_init_module(void)
 	int ret = -ENOMEM;
 	DSM_PRINT(DEBUG_INIT, "Initializing module\n");
 
-	/* initialize caching mechanisms */ 
+	/* initialize caching mechanisms */
 
 	if (digsig_init_caching())
 		goto out;
