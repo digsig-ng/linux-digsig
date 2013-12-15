@@ -106,9 +106,8 @@ ssize_t dsi_write(struct file *filp, const char *buff, size_t count,
 
 	dsi_init_pkey(buff[0]);
 
-	if (raw_public_key_n && raw_public_key_e) {
+	if (raw_public_key_n && raw_public_key_e)
 		g_init = 1;
-	}
 
 	return count;
 }
