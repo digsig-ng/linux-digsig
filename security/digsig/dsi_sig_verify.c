@@ -16,11 +16,12 @@
  *          Chris Wright    Sep 2004
  */
 
-#include "digsig_crypto.h"
-
 #include <linux/string.h>
 #include <linux/mm.h>
 #include <linux/highmem.h>
+#include <linux/crypto.h>
+#include <linux/err.h>
+#include <linux/scatterlist.h>
 
 #include "dsi.h"
 #include "dsi_debug.h"
@@ -38,7 +39,7 @@
 #define TVMEMSIZE	4096
 
 int gDigestLength[] = { /* SHA-1 */ 0x14 };
-static struct crypto_tfm *sha1_tfm;
+static struct crypto_hash *sha1_tfm;
 MPI digsig_public_key[] = {MPI_NULL, MPI_NULL};
 
 
@@ -48,7 +49,7 @@ MPI digsig_public_key[] = {MPI_NULL, MPI_NULL};
 
 static int
 digsig_rsa_bsign_verify(unsigned char *sha_cat, int length,
-		     unsigned char *signed_hash);
+			unsigned char *signed_hash);
 
 static int digsig_sha1_init(SIGCTX *ctx);
 
@@ -197,7 +198,7 @@ Return value:
 void digsig_sign_verify_free(void)
 {
 	if (sha1_tfm) {
-		crypto_free_tfm(sha1_tfm);
+		crypto_free_hash(sha1_tfm);
 		sha1_tfm = NULL;
 	}
 	/* this might cause unpredictable behavior if structures are refering to this,
@@ -321,9 +322,8 @@ static int digsig_rsa_bsign_verify(unsigned char *hash_format, int length,
 	nframe = mpi_get_nbits(digsig_public_key[0]);
 	hash = do_encode_md(new_sig, nframe);
 
-	if (hash == MPI_NULL) {
-		DSM_PRINT(DEBUG_SIGN, "mpi creation failed\\n");
-	}
+	if (hash == MPI_NULL)
+		DSM_PRINT(DEBUG_SIGN, "mpi creation failed\n");
 
 	/* Do RSA verification */
 	cmp = rsa_verify(hash, &data, digsig_public_key);
@@ -331,9 +331,12 @@ static int digsig_rsa_bsign_verify(unsigned char *hash_format, int length,
 
 	mpi_free(hash);
 	mpi_free(data);
+
 	kfree(ctx->tvmem);
 	kfree(ctx);
+
 	kfree(new_sig);
+
 	return rc;
 }
 
@@ -351,14 +354,16 @@ static int digsig_sha1_init(SIGCTX *ctx)
 		return -1;
 
 	if (sha1_tfm == NULL)
-		sha1_tfm = crypto_alloc_tfm("sha1", 0);
-	ctx->tfm = sha1_tfm;
-	if (ctx->tfm == NULL) {
+		sha1_tfm = crypto_alloc_hash("sha1", 0, CRYPTO_ALG_ASYNC);
+
+	ctx->desc.flags = CRYPTO_ALG_ASYNC;
+	ctx->desc.tfm = sha1_tfm;
+	if (ctx->desc.tfm == NULL) {
 		DSM_ERROR("tfm allocation failed\n");
 		return -1;
 	}
 
-	crypto_digest_init(ctx->tfm);
+	crypto_hash_init(&ctx->desc);
 	return 0;
 }
 
@@ -377,9 +382,9 @@ static void digsig_sha1_update(SIGCTX *ctx, char *buf, int buflen)
 	plaintext = (void *) ctx->tvmem;
 
 	sg_set_page(&ctx->sg[0], virt_to_page(plaintext), buflen,
-		((long) plaintext & ~PAGE_MASK));
+		    ((long) plaintext & ~PAGE_MASK));
 
-	crypto_digest_update(ctx->tfm, ctx->sg, 1);
+	crypto_hash_update(&ctx->desc, ctx->sg, 1);
 }
 
 /******************************************************************************
@@ -396,6 +401,6 @@ static int digsig_sha1_final(SIGCTX *ctx, char *digest)
 	if (ctx == NULL)
 		return -EINVAL;
 
-	crypto_digest_final(ctx->tfm, digest);
+	crypto_hash_final(&ctx->desc, digest);
 	return 0;
 }

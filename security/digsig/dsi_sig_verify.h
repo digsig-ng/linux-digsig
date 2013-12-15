@@ -18,7 +18,9 @@
 #define _DSI_SIG_VERIFY_H
 
 #include <linux/crypto.h>
+#include <linux/err.h>
 #include <linux/scatterlist.h>
+
 #include "gnupg/mpi/mpi.h"
 
 
@@ -71,7 +73,7 @@
 #define SIGN_RSA 0
 
 typedef struct sig_ctx_st {
-	struct crypto_tfm *tfm;
+	struct hash_desc desc;
 	struct scatterlist sg[1];
 	int digestAlgo;
 	int signAlgo;
@@ -84,7 +86,7 @@ extern MPI digsig_public_key[];
 SIGCTX *digsig_sign_verify_init(int hashalgo, int signalgo);
 int digsig_sign_verify_update(SIGCTX * ctx, char *buf, int buflen);
 int digsig_sign_verify_final(SIGCTX * ctx, int siglen /* PublicKey */ ,
-			  unsigned char *signed_hash);
+			     unsigned char *signed_hash);
 void digsig_sign_verify_free(void);
 int digsig_init_pkey(const char read_par, unsigned char *raw_public_key, int mpi_size);
 
