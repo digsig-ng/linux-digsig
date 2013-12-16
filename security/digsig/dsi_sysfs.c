@@ -234,9 +234,9 @@ digsig_key_store(struct kobject *obj, struct attribute *attr, const char *buff, 
 
 	digsig_init_pkey(buff[0], raw_public_key, mpi_size);
 
-	if (digsig_public_key[0] && digsig_public_key[1]) {
+	if (digsig_public_key[0] && digsig_public_key[1])
 		g_init = 1;
-	}
+
 	kfree(raw_public_key);
 
 	return count;
