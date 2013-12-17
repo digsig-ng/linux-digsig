@@ -714,7 +714,7 @@ static int __init digsig_init_module(void)
 
 	/* register */
 	if (register_security(&digsig_security_ops)) {
-		DSM_ERROR("%s: Failure registering DigSig as primairy security module\n", __func__);
+		DSM_ERROR("%s: Failure registering DigSig as primary security module\n", __func__);
 	}
 	return 0;
 out_sysfs:
