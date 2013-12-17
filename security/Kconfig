@@ -170,7 +170,7 @@ config DEFAULT_SECURITY
 	default "tomoyo" if DEFAULT_SECURITY_TOMOYO
 	default "apparmor" if DEFAULT_SECURITY_APPARMOR
 	default "yama" if DEFAULT_SECURITY_YAMA
-	default "digsig" if DEFAULT_SECURITY_YAMA
+	default "digsig" if DEFAULT_SECURITY_DIGSIG
 	default "" if DEFAULT_SECURITY_DAC
 
 endmenu
