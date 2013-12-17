@@ -696,6 +696,11 @@ static int __init digsig_init_module(void)
 	int ret = -ENOMEM;
 	DSM_PRINT(DEBUG_INIT, "Initializing module\n");
 
+	if (!security_module_enable(&digsig_security_ops)) {
+		DSM_ERROR("Error enabling security module for DigSig\n");
+		goto out;
+	}
+
 	/* initialize caching mechanisms */
 
 	if (digsig_init_caching())
