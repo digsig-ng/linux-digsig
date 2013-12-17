@@ -358,7 +358,7 @@ static int digsig_sha1_init(SIGCTX *ctx)
 
 	ctx->desc.flags = CRYPTO_ALG_ASYNC;
 	ctx->desc.tfm = sha1_tfm;
-	if (ctx->desc.tfm == NULL) {
+	if (IS_ERR(ctx->desc.tfm)) {
 		DSM_ERROR("tfm allocation failed\n");
 		return -1;
 	}
