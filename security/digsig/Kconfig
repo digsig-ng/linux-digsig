@@ -1,6 +1,8 @@
 config SECURITY_DIGSIG
-        bool "DigSig Support"
-        depends on SECURITY && CRYPTO
-        default n
-        help
-          This enables the DigSig security module.
+	bool "DigSig Support"
+	depends on SECURITY && CRYPTO
+	select SECURITY_PATH
+	select SECURITYFS
+	default n
+	help
+	  This enables the DigSig security module.
