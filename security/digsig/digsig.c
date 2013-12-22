@@ -530,19 +530,11 @@ static inline int is_unprotected_file(struct file *file)
 			__func__, file->f_dentry->d_name.name, exec_time); \
 	}
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,12)
 static int digsig_file_mmap(struct file * file,
 			unsigned long reqprot,
 			unsigned long calcprot,
 			unsigned long flags)
 {
-	unsigned long prot = reqprot;
-#else
-static int digsig_file_mmap(struct file * file,
-			unsigned long prot,
-			unsigned long flags)
-{
-#endif
 	struct elf64_hdr *elf64_ex;
 	struct elf32_hdr *elf32_ex;
 	int retval, die_if_elf = 0;
@@ -558,7 +550,7 @@ static int digsig_file_mmap(struct file * file,
 	if (!g_init)
 		return 0;
 
-	if (!(prot & VM_EXEC))
+	if (!(reqprot & VM_EXEC))
 		return 0;
 	if (!file)
 		return 0;
