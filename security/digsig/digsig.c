@@ -69,9 +69,6 @@ static DEFINE_SEMAPHORE(digsig_sem);
 /* Indicate if module as key or not */
 int g_init = 0;
 
-/* Keep track of how we are registered */
-static int secondary;
-
 #ifdef DIGSIG_LOG
 int DigsigDebugLevel = DEBUG_INIT | DEBUG_SIGN;
 #else
