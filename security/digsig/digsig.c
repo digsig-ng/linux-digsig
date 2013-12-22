@@ -38,7 +38,6 @@
 #include <linux/uaccess.h>
 
 #include "dsi_sig_verify.h"
-#include "dsi_debug.h"
 #include "dsi.h"
 #include "dsi_sysfs.h"
 #include "digsig_cache.h"

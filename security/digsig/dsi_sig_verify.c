@@ -24,7 +24,6 @@
 #include <linux/scatterlist.h>
 
 #include "dsi.h"
-#include "dsi_debug.h"
 #include "dsi_sig_verify.h"
 #include "gnupg/cipher/rsa-verify.h"
 
