@@ -143,44 +143,44 @@ static struct kobj_type digsig_kobj_type = {
 };
 
 /* digsig_kobject: a kobject for our /sys/digsig directory */
-static struct kobject digsig_kobject = {
-	.name = "digsig",
-	.ktype = &digsig_kobj_type
-};
-
+static struct kobject *digsig_kobject;
 
 /*
  * init and cleanup functions for the /sys/digsig directory.
  */
 int __init digsig_init_sysfs(void)
 {
-	if (kobject_init_and_add(&digsig_kobject, &digsig_kobj_type, NULL, "digsig") != 0) {
-		DSM_ERROR("Digsig key failed to register properly\n");
+	digsig_kobject = kobject_create_and_add("digsig", NULL);
+	if (digsig_kobject == NULL) {
+		DSM_ERROR("digsig kobject create failed\n");
 		goto err;
 	}
-	if (sysfs_create_file(&digsig_kobject, &digsig_attr_key.attr) != 0) {
+
+	if (sysfs_create_file(digsig_kobject, &digsig_attr_key.attr) != 0) {
 		DSM_ERROR("Create file failed\n");
 		goto create_key;
 	}
-	if (sysfs_create_file(&digsig_kobject, &digsig_attr_revoke.attr) != 0) {
+
+	if (sysfs_create_file(digsig_kobject, &digsig_attr_revoke.attr) != 0) {
 		DSM_ERROR("Create revocation file failed\n");
 		goto create_revoke;
 	}
+
 	return 0;
 
 create_revoke:
-	sysfs_remove_file(&digsig_kobject, &digsig_attr_key.attr);
+	sysfs_remove_file(digsig_kobject, &digsig_attr_key.attr);
 create_key:
-	kobject_del(&digsig_kobject);
+	kobject_put(digsig_kobject);
 err:
 	return -1;
 }
 
 void digsig_cleanup_sysfs(void)
 {
-	sysfs_remove_file(&digsig_kobject, &digsig_attr_key.attr);
-	sysfs_remove_file(&digsig_kobject, &digsig_attr_revoke.attr);
-	kobject_del(&digsig_kobject);
+	sysfs_remove_file(digsig_kobject, &digsig_attr_key.attr);
+	sysfs_remove_file(digsig_kobject, &digsig_attr_revoke.attr);
+	kobject_put(digsig_kobject);
 }
 
 /********************************************************************************
