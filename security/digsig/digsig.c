@@ -56,10 +56,10 @@
 #endif
 
 #define get_inode_security(ino) ((unsigned long)(ino->i_security))
-#define set_inode_security(ino,val) (ino->i_security = (void *)val)
+#define set_inode_security(ino, val) (ino->i_security = (void *)val)
 
 #define get_file_security(file) ((unsigned long)(file->f_security))
-#define set_file_security(file,val) (file->f_security = (void *)val)
+#define set_file_security(file, val) (file->f_security = (void *)val)
 
 unsigned long int total_jiffies = 0;
 
@@ -140,7 +140,7 @@ static char *digsig_read_signature(struct file *file, unsigned long offset)
 	char *buffer = kmalloc(DIGSIG_ELF_SIG_SIZE, DIGSIG_SAFE_ALLOC);
 
 	if (!buffer) {
-		DSM_ERROR ("kmalloc failed in %s for buffer.\n", __func__);
+		DSM_ERROR("kmalloc failed in %s for buffer.\n", __func__);
 		return NULL;
 	}
 	retval = kernel_read(file, offset, (char *) buffer,
@@ -169,7 +169,7 @@ Return value: Upon suscess: buffer containing signature (size of signature is fi
               Failure: null pointer
 ******************************************************************************/
 static char *digsig_find_signature32(struct elf32_hdr *elf_ex,
-				Elf32_Shdr * elf_shdata, struct file *file,
+				Elf32_Shdr *elf_shdata, struct file *file,
 				unsigned long *sh_offset)
 {
 	int i = 0;
@@ -197,7 +197,7 @@ static char *digsig_find_signature32(struct elf32_hdr *elf_ex,
 }
 
 static char *digsig_find_signature64(struct elf64_hdr *elf_ex,
-				Elf64_Shdr * elf_shdata, struct file *file,
+				Elf64_Shdr *elf_shdata, struct file *file,
 				unsigned long *sh_offset)
 {
 	int i = 0;
@@ -244,7 +244,7 @@ digsig_verify_signature(char *sig_orig, struct file *file,
 	loff_t i_size;
 	SIGCTX *ctx = NULL;
 
-	down (&digsig_sem);
+	down(&digsig_sem);
 	if (digsig_is_revoked_sig(sig_orig)) {
 		DSM_ERROR("%s: Refusing attempt to load an ELF file with"
 			  " a revoked signature.\n", __func__);
@@ -253,7 +253,7 @@ digsig_verify_signature(char *sig_orig, struct file *file,
 
 	retval = -ENOMEM;
 	ctx = digsig_sign_verify_init(HASH_SHA1, SIGN_RSA);
-	if (!ctx ) {
+	if (!ctx) {
 		DSM_PRINT(DEBUG_SIGN,
 			  "%s: Cannot allocate crypto context.\n", __func__);
 		goto out;
@@ -261,12 +261,12 @@ digsig_verify_signature(char *sig_orig, struct file *file,
 
 	read_blocks = kmalloc(DIGSIG_ELF_READ_BLOCK_SIZE, DIGSIG_SAFE_ALLOC);
 	if (!read_blocks) {
-		DSM_ERROR ("kmalloc failed in %s for read_block.\n", __func__);
+		DSM_ERROR("kmalloc failed in %s for read_block.\n", __func__);
 		goto out;
 	}
 
 	i_size = i_size_read(file->f_dentry->d_inode);
-	for (offset = 0; offset < i_size; offset += DIGSIG_ELF_READ_BLOCK_SIZE){
+	for (offset = 0; offset < i_size; offset += DIGSIG_ELF_READ_BLOCK_SIZE) {
 
 		retval = kernel_read(file, offset, (char *) read_blocks,
 				   DIGSIG_ELF_READ_BLOCK_SIZE);
@@ -310,7 +310,7 @@ digsig_verify_signature(char *sig_orig, struct file *file,
 	if (retval != 0) {
 		DSM_PRINT(DEBUG_SIGN,
 			  "%s: Error calculating final crypto verification\n", __func__);
-	        retval = -EPERM;
+		retval = -EPERM;
 		goto out;
 	}
 
@@ -322,7 +322,7 @@ out:
 		kfree(ctx->tvmem);
 		kfree(ctx);
 	}
-	up (&digsig_sem);
+	up(&digsig_sem);
 	return retval;
 }
 
@@ -376,9 +376,8 @@ static void digsig_allow_write_access(struct file *file)
  */
 static void digsig_file_free_security(struct file *file)
 {
-	if (file->f_security) {
+	if (file->f_security)
 		digsig_allow_write_access(file);
-	}
 }
 
 /**
@@ -527,7 +526,7 @@ static inline int is_unprotected_file(struct file *file)
 			__func__, file->f_dentry->d_name.name, exec_time); \
 	}
 
-static int digsig_file_mmap(struct file * file,
+static int digsig_file_mmap(struct file *file,
 			unsigned long reqprot,
 			unsigned long calcprot,
 			unsigned long flags)
@@ -652,11 +651,11 @@ static int digsig_file_mmap(struct file * file,
 		retval = -EPERM;
 	}
 
-	kfree (sig_orig);
+	kfree(sig_orig);
  out_free_shdata:
-	kfree (elf64_shdata);
+	kfree(elf64_shdata);
  out_with_file:
-	kfree (elf64_ex);
+	kfree(elf64_ex);
  out_file_no_buf:
 	if (allow_write_on_exit)
 		digsig_allow_write_access(file);
