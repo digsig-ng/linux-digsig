@@ -726,7 +726,7 @@ out:
 	return ret;
 }
 
-security_initcall(digsig_init_module);
+module_init(digsig_init_module);
 
 /* see linux/module.h */
 MODULE_LICENSE("GPL");
