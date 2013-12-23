@@ -37,14 +37,9 @@
 
 #define DIGSIG_SAFE_ALLOC (in_interrupt () ? GFP_ATOMIC : GFP_KERNEL)
 
-/* This is a hack to avoid using va_lists */
-#define DSM_ERROR(fmt,arg...) printk(DIGSIG_MODULE_NAME" Error - " fmt,##arg)
-
 extern int g_init;
 
 /* dsi_debug.h definitions below */
-
-#define DIGSIG_MODULE_NAME "DIGSIG MODULE"
 
 #define DEBUG_ALL             0xFFFFFFFF
 #define DEBUG_INIT            0x00000001	/* 1 */
@@ -77,11 +72,15 @@ extern int g_init;
 
 extern int DigsigDebugLevel;
 
-/* This is a hack to avoid using va_lists */
-#define DSM_PRINT(dbg,fmt,arg...) \
-    if (dbg & DigsigDebugLevel) printk(DIGSIG_MODULE_NAME" - " fmt,##arg)
+#define DIGSIG_MODULE_NAME "digsig"
 
-#define DSM_PRINT_NO_PREFIX(dbg,fmt,arg...) \
-    if (dbg & DigsigDebugLevel) printk(fmt,##arg)
+/* This is a hack to avoid using va_lists */
+#define DSM_PRINT(dbg, fmt, arg...) \
+    if (dbg & DigsigDebugLevel) printk(DIGSIG_MODULE_NAME ": " fmt, ##arg)
+
+#define DSM_PRINT_NO_PREFIX(dbg, fmt, arg...) \
+    if (dbg & DigsigDebugLevel) printk(fmt, ##arg)
+
+#define DSM_ERROR(fmt, arg...) printk(DIGSIG_MODULE_NAME ": error: " fmt, ##arg)
 
 #endif /* _DSI_H */
