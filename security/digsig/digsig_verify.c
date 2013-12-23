@@ -23,7 +23,7 @@
 #include <linux/err.h>
 #include <linux/scatterlist.h>
 
-#include "dsi.h"
+#include "digsig_common.h"
 #include "digsig_verify.h"
 #include "gnupg/cipher/rsa-verify.h"
 

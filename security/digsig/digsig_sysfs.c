@@ -32,7 +32,7 @@
 #include <linux/elf.h>
 #include <linux/slab.h>
 
-#include "dsi.h"
+#include "digsig_common.h"
 #include "digsig_verify.h"
 #include "digsig_cache.h"
 #include "digsig_revocation.h"

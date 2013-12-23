@@ -24,7 +24,7 @@
 #include <linux/fs.h>
 #include <asm/uaccess.h>
 #include <linux/kobject.h>
-#include "dsi.h"
+#include "digsig_common.h"
 #include "digsig_cache.h"
 #include "digsig_revocation.h"
 #include "digsig_verify.h"

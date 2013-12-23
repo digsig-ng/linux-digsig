@@ -38,7 +38,7 @@
 #include <linux/uaccess.h>
 
 #include "digsig_verify.h"
-#include "dsi.h"
+#include "digsig_common.h"
 #include "digsig_sysfs.h"
 #include "digsig_cache.h"
 #include "digsig_revocation.h"

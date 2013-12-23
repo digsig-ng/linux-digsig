@@ -1,7 +1,7 @@
 /*
  * Digital Security Module (DigSig)
  *
- * dsi.h
+ * digsig_common.h
  *
  * The main header file for DSM
  *
@@ -23,8 +23,8 @@
  * Modifications: Axelle Apvrille - TRACEFUNC level.
  */
 
-#ifndef _DSI_H
-#define _DSI_H
+#ifndef _DIGSIG_COMMON_H
+#define _DIGSIG_COMMON_H
 
 #include <linux/kernel.h>
 #include <linux/interrupt.h>
@@ -83,4 +83,4 @@ extern int DigsigDebugLevel;
 
 #define DSM_ERROR(fmt, arg...) printk(DIGSIG_MODULE_NAME ": error: " fmt, ##arg)
 
-#endif /* _DSI_H */
+#endif /* _DIGSIG_COMMON_H */

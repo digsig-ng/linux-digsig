@@ -24,7 +24,7 @@
 #include <linux/log2.h>
 #include <linux/uaccess.h>
 #include <linux/kobject.h>
-#include "dsi.h"
+#include "digsig_common.h.h"
 #include "digsig_cache.h"
 #include "digsig_verify.h"
 #include <linux/hash.h>
