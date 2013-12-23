@@ -24,11 +24,12 @@
 #include <linux/log2.h>
 #include <linux/uaccess.h>
 #include <linux/kobject.h>
+#include <linux/hash.h>
+#include <linux/seqlock.h>
+
 #include "digsig_common.h.h"
 #include "digsig_cache.h"
 #include "digsig_verify.h"
-#include <linux/hash.h>
-#include <linux/seqlock.h>
 
 #ifdef DIGSIG_DEBUG
 #define DIGSIG_MODE 0		/*permissive  mode */
