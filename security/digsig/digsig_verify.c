@@ -1,7 +1,7 @@
 /*
  * Digital Signature (DigSig)
  *
- * dsi_sig_verify.c
+ * digsig_verify.c
  *
  * Copyright (C) 2003 Ericsson, Inc
  *
@@ -24,7 +24,7 @@
 #include <linux/scatterlist.h>
 
 #include "dsi.h"
-#include "dsi_sig_verify.h"
+#include "digsig_verify.h"
 #include "gnupg/cipher/rsa-verify.h"
 
 /*

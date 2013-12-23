@@ -33,7 +33,7 @@
 #include <linux/slab.h>
 
 #include "dsi.h"
-#include "dsi_sig_verify.h"
+#include "digsig_verify.h"
 #include "digsig_cache.h"
 #include "digsig_revocation.h"
 

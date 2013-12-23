@@ -37,7 +37,7 @@
 #include <linux/semaphore.h>
 #include <linux/uaccess.h>
 
-#include "dsi_sig_verify.h"
+#include "digsig_verify.h"
 #include "dsi.h"
 #include "digsig_sysfs.h"
 #include "digsig_cache.h"

@@ -3,7 +3,7 @@
 obj-$(CONFIG_SECURITY_DIGSIG) := digsig_verif.o
 
 digsig_verif-y := digsig.o digsig_sysfs.o digsig_cache.o digsig_revocation.o \
-	dsi_sig_verify.o
+	digsig_verify.o
 
 digsig_verif-y += ./gnupg/mpi/generic/mpih-lshift.o \
 	./gnupg/mpi/generic/mpih-mul1.o ./gnupg/mpi/generic/mpih-mul2.o \

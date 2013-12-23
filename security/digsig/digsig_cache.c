@@ -26,7 +26,7 @@
 #include <linux/kobject.h>
 #include "dsi.h"
 #include "digsig_cache.h"
-#include "dsi_sig_verify.h"
+#include "digsig_verify.h"
 #include <linux/hash.h>
 #include <linux/seqlock.h>
 

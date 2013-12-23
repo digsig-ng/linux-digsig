@@ -1,7 +1,7 @@
 /*
  * Distributed Security Module (DSM)
  *
- * dsi_sig_verify.h
+ * digsig_verify.h
  *	
  * Copyright (C) 2002-2003 Ericsson, Inc
  *
@@ -14,8 +14,8 @@
  *         David Gordon
  */
 
-#ifndef _DSI_SIG_VERIFY_H
-#define _DSI_SIG_VERIFY_H
+#ifndef _DIGSIG_VERIFY_H
+#define _DIGSIG_VERIFY_H
 
 #include <linux/crypto.h>
 #include <linux/err.h>
@@ -92,4 +92,5 @@ int digsig_init_pkey(const char read_par, unsigned char *raw_public_key, int mpi
 
 
 
-#endif /* _DSI_SIG_VERIFY_H */
+#endif /* _DIGSIG_VERIFY_H */
+
