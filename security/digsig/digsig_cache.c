@@ -176,14 +176,14 @@ void digsig_cache_signature(struct inode *inode)
 	int i, h;
 
 	if (!inode)
-		panic("digsig:%s:asked to cache null inode\n", __FUNCTION__);
+		panic("digsig:%s:asked to cache null inode\n", __func__);
 
 	h = hash(inode);
 
 	l = &sig_cache[h];
 
 	DSM_PRINT(DEBUG_SIGN,
-		"%s: adding cache entry at %d\n", __FUNCTION__, h);
+		"%s: adding cache entry at %d\n", __func__, h);
 
 	if (!spin_trylock(&l->sequence.lock))
 		return;
@@ -221,7 +221,7 @@ int __init digsig_init_caching(void)
 		dsi_cache_buckets = 1 << digsig_hash_bits;
 		DSM_PRINT(DEBUG_INIT,
 			  "%s: dsi_cache_buckets set to %d (bits %d)\n",
-			  __FUNCTION__, dsi_cache_buckets, digsig_hash_bits);
+			  __func__, dsi_cache_buckets, digsig_hash_bits);
 	}
 
 	sig_cache = kmalloc(dsi_cache_buckets * sizeof(struct digsig_hash_line),
