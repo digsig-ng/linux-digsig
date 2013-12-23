@@ -12,10 +12,10 @@
  *      (at your option) any later version.
  *
  * Author: Serge Hallyn Nov 2003, Jan 2004: add caching of signature validation
- * modifs: Makan Pourzandi Mar 2004 
- *         Chris Wright    Sep 2004 
+ * modifs: Makan Pourzandi Mar 2004
+ *         Chris Wright    Sep 2004
  *         Serge Hallyn Sep 2004: moved to smp-scalable seqlock-based design.
- *         
+ *
  */
 
 #include <linux/moduleparam.h>
@@ -91,10 +91,10 @@ Description : does the cache validation entry describe this inode?
 	If the inode * is the same value, but i_ino or i_sb has changed, then
 	the inode has been unloaded since we saved the validation, so we must
 	clear the entry.
-Parameters  : 
+Parameters  :
 	@p: a cached signature validation entry
 	@inode: an inode
-Return value: 1 if the sig entry is for the given inode, 0 otherwise 
+Return value: 1 if the sig entry is for the given inode, 0 otherwise
 ******************************************************************************/
 static inline int
 is_same_inode(struct digsig_hash_entry *e, struct inode *inode)
@@ -110,9 +110,9 @@ is_same_inode(struct digsig_hash_entry *e, struct inode *inode)
 }
 
 /******************************************************************************
-Description : Define if the inode is already in the list.  
-Parameters  : @inode the one we search for 
-Return value: 1 if found, 0 otherwise 
+Description : Define if the inode is already in the list.
+Parameters  : @inode the one we search for
+Return value: 1 if found, 0 otherwise
 ******************************************************************************/
 int is_cached_signature(struct inode *inode)
 {
@@ -125,7 +125,7 @@ int is_cached_signature(struct inode *inode)
 	do {
 		found = 0;
 		seq = read_seqbegin(&l->sequence);
-		for (i=0; i<ENTRIES_PER_BUCKET && !found; i++)
+		for (i = 0; i < ENTRIES_PER_BUCKET && !found; i++)
 			if (is_same_inode(&l->entry[i], inode))
 				found = 1;
 	} while (read_seqretry(&l->sequence, seq));
@@ -135,7 +135,7 @@ int is_cached_signature(struct inode *inode)
 
 /******************************************************************************
 Description : remove_signature
-Parameters  : @inode to be removed 
+Parameters  : @inode to be removed
 Return value: none
 ******************************************************************************/
 void remove_signature(struct inode *inode)
@@ -146,7 +146,7 @@ void remove_signature(struct inode *inode)
 	h = hash(inode);
 	l = &sig_cache[h];
 	write_seqlock(&l->sequence);
-	for (i=0; i<ENTRIES_PER_BUCKET; i++)
+	for (i = 0; i < ENTRIES_PER_BUCKET; i++)
 		if (is_same_inode(&l->entry[i], inode))
 			l->entry[i].inode = 0;
 	write_sequnlock(&l->sequence);
@@ -161,12 +161,12 @@ static inline short inc_evicted(struct digsig_hash_line *l)
 }
 
 /******************************************************************************
-Description : 
+Description :
  * We've validated the signature on inode.  Cache that decision.
  * If the hash bucket is full, we pick the next evicted entry in a round-robin
  * fashion.  Otherwise, we make sure that the next evicted entry will not be
  * the one we just inserted.
-Parameters  : 
+Parameters  :
 	@inode: inode whose signature validation to cache
 Return value: none
 ******************************************************************************/
@@ -190,7 +190,8 @@ void digsig_cache_signature(struct inode *inode)
 	else
 		write_seqcount_begin(&l->sequence.seqcount);
 
-	for (i=0; i<ENTRIES_PER_BUCKET && l->entry[i].inode; i++);
+	for (i = 0; i < ENTRIES_PER_BUCKET && l->entry[i].inode; i++)
+		;
 
 
 	if (i == ENTRIES_PER_BUCKET)
@@ -205,7 +206,7 @@ void digsig_cache_signature(struct inode *inode)
 }
 
 /******************************************************************************
-Description : Initialize caching 
+Description : Initialize caching
 Parameters  : none
 Return value: 0 on success, 1 on failure.
 ******************************************************************************/
@@ -218,13 +219,13 @@ int __init digsig_init_caching(void)
 	if (dsi_cache_buckets != (1 << digsig_hash_bits)) {
 		digsig_hash_bits++;
 		dsi_cache_buckets = 1 << digsig_hash_bits;
-		DSM_PRINT (DEBUG_INIT,
-				"%s: dsi_cache_buckets set to %d (bits %d)\n",
-				__FUNCTION__, dsi_cache_buckets, digsig_hash_bits);
+		DSM_PRINT(DEBUG_INIT,
+			  "%s: dsi_cache_buckets set to %d (bits %d)\n",
+			  __FUNCTION__, dsi_cache_buckets, digsig_hash_bits);
 	}
 
-	sig_cache = kmalloc(dsi_cache_buckets * 
-			sizeof(struct digsig_hash_line), GFP_KERNEL);
+	sig_cache = kmalloc(dsi_cache_buckets * sizeof(struct digsig_hash_line),
+			    GFP_KERNEL);
 
 
 	if (!sig_cache) {
@@ -232,14 +233,14 @@ int __init digsig_init_caching(void)
 		return 1;
 	}
 
-	for (i=0; i<dsi_cache_buckets; i++) {
+	for (i = 0; i < dsi_cache_buckets; i++) {
 		seqlock_init(&sig_cache[i].sequence);
 		sig_cache[i].next_evicted = 0;
-		for (j=0; j<ENTRIES_PER_BUCKET; j++)
+		for (j = 0; j < ENTRIES_PER_BUCKET; j++)
 			sig_cache[i].entry[j].inode = NULL;
 	}
 
-	return 0; 
+	return 0;
 }
 
 /*
