@@ -220,7 +220,7 @@ digsig_key_store(struct kobject *obj, struct attribute *attr, const char *buff, 
 		raw_public_key =
 			kmalloc(count - DIGSIG_KEY_OFFSET, DIGSIG_SAFE_ALLOC);
 		if (!raw_public_key) {
-			DSM_ERROR("kmalloc fail for %c in %s\n", buff[0], __FUNCTION__);
+			DSM_ERROR("kmalloc fail for %c in %s\n", buff[0], __func__);
 			return -ENOMEM;
 		}
 		memcpy(raw_public_key, &buff[DIGSIG_KEY_OFFSET], count - DIGSIG_KEY_OFFSET);
