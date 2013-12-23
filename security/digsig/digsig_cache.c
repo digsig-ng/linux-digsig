@@ -22,7 +22,7 @@
 #include <linux/kernel.h>
 #include <linux/fs.h>
 #include <linux/log2.h>
-#include <asm/uaccess.h>
+#include <linux/uaccess.h>
 #include <linux/kobject.h>
 #include "dsi.h"
 #include "digsig_cache.h"
