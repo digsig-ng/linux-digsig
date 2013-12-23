@@ -14,8 +14,8 @@
  *
  * Vincent Roy
  */
-#ifndef _DSI_SYSFS_H
-#define _DSI_SYSFS_H
+#ifndef _DIGSIG_SYSFS_H
+#define _DIGSIG_SYSFS_H
 
 ssize_t	digsig_store(struct kobject *obj, struct attribute *attr,
 		     const char *buff, size_t count);
@@ -29,4 +29,4 @@ ssize_t digsig_rev_list_show(struct kobject *obj, struct attribute *attr,
 int digsig_init_sysfs(void);
 void digsig_cleanup_sysfs(void);
 
-#endif /* _DSI_SYSFS_H */
+#endif /* _DIGSIG_SYSFS_H */
