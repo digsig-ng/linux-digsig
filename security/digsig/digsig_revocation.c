@@ -14,7 +14,7 @@
  *      (at your option) any later version.
  *
  * Author: Serge Hallyn Mar 2004
- * modifs: Chris Wright Sept 2004 
+ * modifs: Chris Wright Sept 2004
  *         Serge Hallyn Sep 2004: added a hash table (keyed on the first 4
  +                        bytes of the hash) for quicker revocation lookup.
  */
@@ -24,11 +24,12 @@
 #include <linux/fs.h>
 #include <asm/uaccess.h>
 #include <linux/kobject.h>
+#include <linux/hash.h>
+
 #include "digsig_common.h"
 #include "digsig_cache.h"
 #include "digsig_revocation.h"
 #include "digsig_verify.h"
-#include <linux/hash.h>
 
 #ifdef DIGSIG_DEBUG
 #define DIGSIG_MODE 0		/*permissive  mode */
@@ -75,7 +76,8 @@ out:
 }
 #endif
 
-int digsig_add_revoked_sig(const char *buffer) {
+int digsig_add_revoked_sig(const char *buffer)
+{
 	int rcount = DIGSIG_ELF_SIG_SIZE - DIGSIG_BSIGN_INFOS - DIGSIG_RSA_DATA_OFFSET;
 	const char *tmp1 = buffer + DIGSIG_BSIGN_INFOS + DIGSIG_RSA_DATA_OFFSET;
 	struct revoked_sig *s;
@@ -88,7 +90,7 @@ int digsig_add_revoked_sig(const char *buffer) {
 
 	INIT_HLIST_NODE(&s->next);
 
-	h = hash_long(*(unsigned long*)tmp1, REVOKE_BITS);
+	h = hash_long(*(unsigned long *)tmp1, REVOKE_BITS);
 	s->sig = mpi_read_from_buffer(tmp1, &rcount, 0);
 	spin_lock(&revoked_list_wlock);
 	hlist_add_head(&s->next, &dsi_revoked_sigs[h]);
@@ -101,7 +103,7 @@ inline void digsig_init_revocation(void)
 {
 	int i;
 
-	for (i=0; i<REVOKE_BUCKETS; i++)
+	for (i = 0; i < REVOKE_BUCKETS; i++)
 		INIT_HLIST_HEAD(&dsi_revoked_sigs[i]);
 }
 
@@ -111,7 +113,7 @@ void digsig_cleanup_revocation(void)
 	struct hlist_node *tmp;
 	struct revoked_sig *e;
 
-	for (i=0; i<REVOKE_BUCKETS; i++) {
+	for (i = 0; i < REVOKE_BUCKETS; i++) {
 		while (!hlist_empty(&dsi_revoked_sigs[i])) {
 			tmp = dsi_revoked_sigs[i].first;
 			hlist_del(tmp);
