@@ -20,6 +20,7 @@
 
 
 #include <linux/init.h>
+#include <linux/genhd.h> /* for accessing bus name in is_unprotected_file() */
 #include <linux/module.h>
 #include <linux/moduleparam.h>
 #include <linux/kernel.h>
@@ -500,18 +501,43 @@ read_section_header(struct file *file, unsigned long sh_size,
 	return elf_shdata;
 }
 
-/**
- * We don't want to validate files which can be written while they are
- * being executed.
- * This means NFS.
+/* DigSig filesystem blacklist - we want to place here the name of any
+ * filesystem where there is a possibility of the data being changed between
+ * verification and execution, typically network file systems like NFS, Samba.
+ */
+static char *digsig_fs_blacklist[] = {
+	"nfs"
+};
+
+static int digsig_fs_blacklist_sz = 1;
+
+/* Validate a file to make sure it cannot be written while it is executed. This
+ * precludes network filesystems, USB mass storage devices. etc.
  */
 static inline int is_unprotected_file(struct file *file)
 {
-	if (strcmp(file->f_dentry->d_inode->i_sb->s_type->name, "nfs") == 0)
+	int i;
+	/* We want to prevent execution from a USB mass storage device. Data
+	 * from a USB device can be changed between reads by malicious software
+	 * on a USB mass storage device controller, and cause the loading of
+	 * malicious code between verification and execution.
+	 */
+#define DIGSIG_RESTRICT_USB_DEVICES
+#ifdef DIGSIG_RESTRICT_USB_DEVICES
+	/* FIXME: this is a very roundabout way to determine the bus name, and
+	 * the field we're using seems to be set for deletion. maybe there's a
+	 * better way? */
+	const char *bus_name = file->f_dentry->d_inode->i_sb->s_bdev->bd_disk->driverfs_dev->bus->name;
+	if (strcmp(bus_name, "usb") == 0)
 		return 1;
+#endif
+
+	for (i = 0; i < digsig_fs_blacklist_sz; i++)
+		if (strcmp(file->f_dentry->d_inode->i_sb->s_type->name, digsig_fs_blacklist[i]) == 0)
+			return 1;
+
 	return 0;
 }
-
 
 #define start_digsig_bench \
 	if (DIGSIG_BENCH) \
