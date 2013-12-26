@@ -454,7 +454,7 @@ static inline struct elf64_hdr *read_elf_header(struct file *file)
 
 	elf_ex = kmalloc(sizeof(struct elf64_hdr), DIGSIG_SAFE_ALLOC);
 	if (!elf_ex) {
-		DSM_ERROR ("%s: kmalloc failed for elf_ex\n", __func__);
+		DSM_ERROR("%s: kmalloc failed for elf_ex\n", __func__);
 		return ERR_PTR(-ENOMEM);
 	}
 
