@@ -27,7 +27,7 @@
 #include <linux/hash.h>
 #include <linux/seqlock.h>
 
-#include "digsig_common.h.h"
+#include "digsig_common.h"
 #include "digsig_cache.h"
 #include "digsig_verify.h"
 
