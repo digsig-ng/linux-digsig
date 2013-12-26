@@ -65,7 +65,8 @@ unsigned long int total_jiffies = 0;
 /* Allocate and free functions for each kind of security blob. */
 static DEFINE_SEMAPHORE(digsig_sem);
 
-/* Indicate if module as key or not */
+/* Status code indicating whether the module has been provided with a key.
+ * 0 is the default state and the hooks will be disabled. */
 int g_init = 0;
 
 #ifdef DIGSIG_LOG
