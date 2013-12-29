@@ -506,7 +506,8 @@ read_section_header(struct file *file, unsigned long sh_size,
  * verification and execution, typically network file systems like NFS, Samba.
  */
 static char *digsig_fs_blacklist[] = {
-	"nfs"
+	"nfs",
+	"cifs",
 };
 
 /* Validate a file to make sure it cannot be written while it is executed. This
