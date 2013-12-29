@@ -509,8 +509,6 @@ static char *digsig_fs_blacklist[] = {
 	"nfs"
 };
 
-static int digsig_fs_blacklist_sz = 1;
-
 /* Validate a file to make sure it cannot be written while it is executed. This
  * precludes network filesystems, USB mass storage devices. etc.
  */
@@ -531,7 +529,7 @@ static inline int is_unprotected_file(struct file *file)
 		return 1;
 #endif
 
-	for (i = 0; i < digsig_fs_blacklist_sz; i++)
+	for (i = 0; i < ARRAY_SIZE(digsig_fs_blacklist); i++)
 		if (strcmp(file->f_dentry->d_inode->i_sb->s_type->name, digsig_fs_blacklist[i]) == 0)
 			return 1;
 
