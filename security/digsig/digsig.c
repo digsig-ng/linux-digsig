@@ -551,7 +551,7 @@ static inline int is_unprotected_file(struct file *file)
 			__func__, file->f_dentry->d_name.name, exec_time); \
 	}
 
-static int digsig_file_mmap(struct file *file,
+static int digsig_mmap_file(struct file *file,
 			unsigned long reqprot,
 			unsigned long calcprot,
 			unsigned long flags)
@@ -698,7 +698,7 @@ static void digsig_inode_free_security(struct inode *inode)
 
 static struct security_operations digsig_security_ops = {
 	.name			= "digsig",
-	.mmap_file		= digsig_file_mmap,
+	.mmap_file		= digsig_mmap_file,
 	.file_free_security	= digsig_file_free_security,
 	.inode_permission	= digsig_inode_permission,
 	.inode_unlink		= digsig_inode_unlink,
