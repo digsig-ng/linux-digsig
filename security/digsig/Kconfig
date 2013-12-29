@@ -6,3 +6,32 @@ config SECURITY_DIGSIG
 	default n
 	help
 	  This enables the DigSig security module.
+
+config SECURITY_DIGSIG_DEBUG
+	bool "DigSig debug mode"
+	depends on SECURITY_DIGSIG
+	default n
+	help
+	  This enables DigSig's debug mode.
+
+config SECURITY_DIGSIG_LOG
+	bool "DigSig logging"
+	depends on SECURITY_DIGSIG
+	default n
+	help
+	  This enables DigSig logging.
+
+config SECURITY_DIGSIG_REVOCATION
+	bool "DigSig signature revocation"
+	depends on SECURITY_DIGSIG
+	default y
+	help
+	  This enables DigSig's revocation setting.
+
+config SECURITY_DIGSIG_RESTRICT_USB_DEVICES
+	bool "DigSig USB restrict"
+	depends on SECURITY_DIGSIG
+	default y
+	help
+	  This prevents DigSig from executing code from storage devices
+	  connected via the USB bus.

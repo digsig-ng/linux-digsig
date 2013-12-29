@@ -31,7 +31,7 @@
 #include "digsig_revocation.h"
 #include "digsig_verify.h"
 
-#ifdef DIGSIG_DEBUG
+#ifdef CONFIG_SECURITY_DIGSIG_DEBUG
 #define DIGSIG_MODE 0		/*permissive  mode */
 #define DIGSIG_BENCH 1
 #else
@@ -51,7 +51,7 @@ static struct hlist_head dsi_revoked_sigs[REVOKE_BUCKETS];
  *  signature has been revoked.  If it has, exec permission is outright
  *  denied.
  */
-#ifdef DIGSIG_REVOCATION
+#ifdef CONFIG_SECURITY_DIGSIG_REVOCATION
 int digsig_is_revoked_sig(char *buffer)
 {
 	struct hlist_node *tmp;

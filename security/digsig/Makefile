@@ -16,6 +16,3 @@ digsig_verif-y += ./gnupg/mpi/generic/mpih-lshift.o \
 	./gnupg/mpi/mpi-inv.o ./gnupg/mpi/mpi-mpow.o ./gnupg/mpi/mpi-mul.o \
 	./gnupg/mpi/mpi-pow.o ./gnupg/mpi/mpi-scan.o ./gnupg/mpi/mpiutil.o \
 	./gnupg/cipher/rsa-verify.o
-
-ccflags-y := -DDIGSIG_DEBUG -DDIGSIG_LOG -DDIGSIG_REVOCATION
-

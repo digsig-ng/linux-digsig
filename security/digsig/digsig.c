@@ -47,7 +47,7 @@
 #include "gnupg/mpi/mpi.h"
 #include "gnupg/cipher/rsa-verify.h"
 
-#ifdef DIGSIG_DEBUG
+#ifdef CONFIG_SECURITY_DIGSIG_DEBUG
 #define DIGSIG_MODE 0		/*permissive  mode */
 #define DIGSIG_BENCH 1
 #else
@@ -70,7 +70,7 @@ static DEFINE_SEMAPHORE(digsig_sem);
  * 0 is the default state and the hooks will be disabled. */
 int g_init = 0;
 
-#ifdef DIGSIG_LOG
+#ifdef CONFIG_SECURITY_DIGSIG_LOG
 int DigsigDebugLevel = DEBUG_INIT | DEBUG_SIGN;
 #else
 int DigsigDebugLevel = DEBUG_INIT;
@@ -522,8 +522,7 @@ static inline int is_unprotected_file(struct file *file)
 	 * on a USB mass storage device controller, and cause the loading of
 	 * malicious code between verification and execution.
 	 */
-#define DIGSIG_RESTRICT_USB_DEVICES
-#ifdef DIGSIG_RESTRICT_USB_DEVICES
+#ifdef CONFIG_SECURITY_DIGSIG_RESTRICT_USB_DEVICES
 	/* FIXME: this is a very roundabout way to determine the bus name, and
 	 * the field we're using seems to be set for deletion. maybe there's a
 	 * better way? */

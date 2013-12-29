@@ -35,7 +35,7 @@ struct revoked_sig {
 void digsig_init_revocation(void);
 void digsig_cleanup_revocation(void);
 int digsig_add_revoked_sig(const char *buffer);
-#ifdef DIGSIG_REVOCATION
+#ifdef CONFIG_SECURITY_DIGSIG_REVOCATION
 int digsig_is_revoked_sig(char *buffer);
 #else
 #define digsig_is_revoked_sig(x) 0
