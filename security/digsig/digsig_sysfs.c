@@ -37,15 +37,12 @@
 #include "digsig_cache.h"
 #include "digsig_revocation.h"
 
+
 /* For use with LTM, we copy everything except the first three bytes
    which are 'n' or 'e' + size.
    For use with GnuPG, we should copy everything except the first byte
 */
-#ifdef DIGSIG_LTM
-#define DIGSIG_KEY_OFFSET 3
-#else
 #define DIGSIG_KEY_OFFSET 1
-#endif
 
 extern long int total_jiffies; /* digsig.c */
 
