@@ -201,7 +201,7 @@ digsig_key_store(struct kobject *obj, struct attribute *attr, const char *buff, 
 	   problem when updating keys while checking the
 	   signatures.*/
 	if (g_init)
-		return -1;
+		return -EPERM;
 
 	switch (buff[0]) {
 	case 'n':
