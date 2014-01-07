@@ -89,6 +89,16 @@ static ssize_t digsig_revoked_store(struct kobject *obj,
 static DIGSIG_ATTR(revoke, 0600, digsig_revoked_show, digsig_revoked_store);
 
 /*
+ * Prototypes and attribute for /sys/digsig/status, which returns a status
+ * code depending on whether the module has been initialized (g_init == 1).
+ */
+static ssize_t digsig_status_show(struct kobject *obj,
+	struct attribute *attr, char *buff);
+static ssize_t digsig_status_store(struct kobject *obj,
+	struct attribute *attr, const char *buff, size_t count);
+static DIGSIG_ATTR(status, 0600, digsig_status_show, digsig_status_store);
+
+/*
  * Next are the digsig sysfs file operations.  These are assigned to
  * the files under /sys/digsig.  They will use the digsig_attribute
  * struct defined above to find the function which should actually be
@@ -154,6 +164,11 @@ int __init digsig_init_sysfs(void)
 		goto create_revoke;
 	}
 
+	if (sysfs_create_file(digsig_kobject, &digsig_attr_status.attr) != 0) {
+		DSM_ERROR("sysfs_create_file() failed for digsig_attr_status\n");
+		goto create_revoke;
+	}
+
 	return 0;
 
 create_revoke:
@@ -168,6 +183,7 @@ void digsig_cleanup_sysfs(void)
 {
 	sysfs_remove_file(digsig_kobject, &digsig_attr_key.attr);
 	sysfs_remove_file(digsig_kobject, &digsig_attr_revoke.attr);
+	sysfs_remove_file(digsig_kobject, &digsig_attr_status.attr);
 	kobject_put(digsig_kobject);
 }
 
@@ -262,4 +278,16 @@ static ssize_t
 digsig_revoked_show(struct kobject *obj, struct attribute *attr, char *buff)
 {
 	return 0;
+}
+
+static ssize_t
+digsig_status_store(struct kobject *obj, struct attribute *attr, const char *buff, size_t count)
+{
+	return 0;
+}
+
+static ssize_t
+digsig_status_show(struct kobject *obj, struct attribute *attr, char *buff)
+{
+	return scnprintf(buff, PAGE_SIZE, "%s\n", g_init == 0 ? "0" : "1");
 }
